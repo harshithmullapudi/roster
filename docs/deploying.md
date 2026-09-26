@@ -79,7 +79,8 @@ builder — then:
 4. **Nothing, for the schema.** The web container applies migrations before it
    starts the server, and exits non-zero if they fail, so a bad migration stops
    the deploy rather than serving a build the schema cannot answer. A database
-   from before migrations existed is adopted in that same step. The
+   from before migrations existed is adopted in that same step. `pnpm dev`
+   applies them the same way, before it starts anything. The
    worker never migrates; on a cold deploy it may start against an unmigrated
    schema, fail, and be restarted by the `ON_FAILURE` policy until the web
    service has caught up.
