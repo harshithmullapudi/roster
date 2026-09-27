@@ -104,21 +104,24 @@ async function replyStatsByThread(
       select
         rp.thread_id,
         rp.created_at,
-        coalesce(
-          nullif(btrim(ru.name), ''),
-          nullif(split_part(ru.email, '@', 1), ''),
-          ru.email,
-          case when ap.slug is not null
-            then coalesce(nullif(btrim(lower(am.agent_name)), ''), 'agent') || ' [' || ap.slug || ']'
-          end,
-          'Agent'
-        ) as display
+        case
+          when rp.kind = 'user' then coalesce(
+            case when btrim(coalesce(ru.name, '')) <> '' then ru.name end,
+            nullif(split_part(ru.email, '@', 1), ''),
+            ru.email,
+            'Unknown'
+          )
+          else coalesce(
+            case when rm.type = 'agent'
+              then nullif(regexp_replace(btrim(lower(rm.agent_name)), '^@', ''), '')
+            end,
+            'Agent'
+          )
+        end as display
       from roster.messages rp
       join roster.threads t on t.id = rp.thread_id
       left join auth.members rm on rm.id = rp.author_member_id
       left join auth.users ru on ru.id = rm.user_id
-      left join roster.projects ap on ap.id = rp.agent_channel_id
-      left join auth.members am on am.id = ap.added_by_member_id
       where rp.thread_id in (${uuidList(threadIds)})
         and rp.id <> t.root_message_id
         and rp.deleted_at is null
