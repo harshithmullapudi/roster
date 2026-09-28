@@ -1,6 +1,6 @@
 [package]
 name = "roster-desktop"
-version = "0.1.5"
+version = "0.1.6"
 description = "Roster Desktop"
 edition = "2021"
 default-run = "roster-desktop"
@@ -17,7 +17,7 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
