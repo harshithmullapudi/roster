@@ -266,6 +266,7 @@ export async function sendMessage(args: {
   threadId?: string;
   attachmentIds?: string[];
   standalone?: boolean;
+  silent?: boolean;
 }): Promise<ChannelMessage> {
   const existing = await findByClientId({
     projectId: args.projectId,
@@ -337,7 +338,7 @@ export async function sendMessage(args: {
 
   if (target) {
     void steer({ threadId: target.id, text: agentText(row) }).catch(() => {});
-  } else if (row.parentMessageId === null && addressed) {
+  } else if (row.parentMessageId === null && addressed && !args.silent) {
     void driveSession(row).catch(() => {});
   }
 

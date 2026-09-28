@@ -32,9 +32,14 @@ const USAGE = `roster — talk to Roster from inside an agent session
                              [--rrule RULE] [--at HH:MM] [--timezone TZ]
   roster tasks status <task-id> <todo|in_progress|done>
   roster tasks update <task-id> [--title TEXT] [--channel-id ID]
+  roster post <text> --channel-id ID        say something in a channel
   roster ask <handle> <task> --thread THREAD_ID
   roster react <message-id> <emoji>         add or remove a reaction
   roster files download <url-or-id> [--out PATH]
+
+\`roster post\` writes a plain message at channel level — an announcement,
+said out loud, not a reply into your own thread. It starts nobody on
+anything; when you want work done, file a task instead.
 
 Pass --channel-id only when someone named the channel the work belongs to;
 that channel's agent starts on it right away. Without it the task waits in
@@ -385,6 +390,32 @@ async function updateTask(parsed: ReturnType<typeof parseArgs>): Promise<void> {
   );
 }
 
+async function post(parsed: ReturnType<typeof parseArgs>): Promise<void> {
+  const config = requireConfig();
+
+  const text = parsed.positionals.slice(1).join(" ").trim();
+  if (!text) {
+    throw new RosterError(
+      'Say what to post, e.g. `roster post "heads up: deploy at noon" --channel-id ID`.',
+    );
+  }
+
+  const channelId =
+    flagString(parsed, "channel-id") ?? process.env.ROSTER_CHANNEL_ID;
+  if (!channelId) {
+    throw new RosterError(
+      "Pass --channel-id with the channel id from your <roster> block.",
+    );
+  }
+
+  const message = (await mutate(config, "cli.post", {
+    channelId,
+    text,
+  })) as { id: string; channelSlug: string };
+
+  console.log(`Posted in #${message.channelSlug} (message ${message.id}).`);
+}
+
 async function ask(parsed: ReturnType<typeof parseArgs>): Promise<void> {
   const config = requireConfig();
 
@@ -479,6 +510,7 @@ export async function main(argv: string[]): Promise<number> {
     else if (command === "tasks" && sub === "create") await createTask(parsed);
     else if (command === "tasks" && sub === "status") await setTaskStatus(parsed);
     else if (command === "tasks" && sub === "update") await updateTask(parsed);
+    else if (command === "post") await post(parsed);
     else if (command === "ask") await ask(parsed);
     else if (command === "react") await react(parsed);
     else if (command === "files" && sub === "download") await filesDownload(parsed);

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -15,7 +17,12 @@ import {
 } from "../services/channels";
 import { delegate } from "../services/delegations";
 import type { ChannelMessage } from "../services/messages";
-import { listMessages, replyCountsByThread } from "../services/messages";
+import {
+  listMessages,
+  replyCountsByThread,
+  sendMessage,
+} from "../services/messages";
+import { textToTiptap } from "../utils/tiptap";
 import { threadDetail, threadProjectId } from "../services/sessions";
 import { assignTask } from "../services/task-assignment";
 import { setTaskStatus, setTaskTitle } from "../services/tasks";
@@ -363,6 +370,43 @@ export const cliRouter = createTRPCRouter({
       });
 
       return { added: result.added, emoji: input.emoji };
+    }),
+
+  post: cliProcedure
+    .input(
+      z.object({
+        channelId: z.string().uuid(),
+        text: z.string().min(1).max(4000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const project = await requireOrgProject({
+        organizationId: ctx.organizationId,
+        memberId: ctx.member.id,
+        role: ctx.member.role,
+        projectId: input.channelId,
+      });
+      if (!project) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "This key cannot post in that channel. It is private to someone else, or does not exist.",
+        });
+      }
+
+      const message = await sendMessage({
+        organizationId: ctx.organizationId,
+        projectId: project.id,
+        authorMemberId: ctx.member.id,
+        role: ctx.member.role,
+        body: textToTiptap(input.text),
+        text: input.text,
+        clientId: `cli-post:${randomUUID()}`,
+        standalone: true,
+        silent: true,
+      });
+
+      return { id: message.id, channelSlug: project.slug };
     }),
 
   createTask: cliProcedure
