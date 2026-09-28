@@ -17,6 +17,7 @@ export interface ChannelSectionProps {
   open: boolean;
   orgSlug: string;
   activeChannelSlug?: string;
+  attention: Set<string>;
   canManage: boolean;
   onOpenChange: (open: boolean) => void;
   onToggleStar: (channel: Channel) => void;
@@ -29,6 +30,7 @@ export function ChannelSection({
   open,
   orgSlug,
   activeChannelSlug,
+  attention,
   canManage,
   onOpenChange,
   onToggleStar,
@@ -56,6 +58,7 @@ export function ChannelSection({
               channel={channel}
               href={`/${orgSlug}/${channel.slug}`}
               active={channel.slug === activeChannelSlug}
+              attention={attention.has(channel.id)}
               canManage={canManage}
               onToggleStar={onToggleStar}
               onChangeVisibility={onChangeVisibility}

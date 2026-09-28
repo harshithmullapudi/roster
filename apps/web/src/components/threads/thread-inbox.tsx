@@ -7,12 +7,13 @@ import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 
+import { inboxThreadsKey } from "~/utils/channel-attention";
 import {
   groupInboxThreads,
   isUnread,
   subscriptionLabel,
 } from "~/utils/inbox-threads";
-import { threadTitle } from "~/utils/live-threads";
+import { liveThreadsKey, threadTitle } from "~/utils/live-threads";
 import { relativeTime } from "~/utils/relative-time";
 import { unreadCountKey } from "~/utils/notification-cache";
 import { replyCountLabel } from "~/utils/thread-rows";
@@ -33,6 +34,8 @@ function useClearUnreadOnOpen(): void {
       .then(() => {
         if (disposed) return;
         queryClient.setQueryData<number>(unreadCountKey(), 0);
+        void queryClient.invalidateQueries({ queryKey: liveThreadsKey() });
+        void queryClient.invalidateQueries({ queryKey: inboxThreadsKey() });
       })
       .catch(() => {
         queryClient.invalidateQueries({ queryKey: unreadCountKey() });

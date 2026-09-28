@@ -24,6 +24,7 @@ export interface ChannelRowProps {
   channel: Channel;
   href: string;
   active: boolean;
+  attention: boolean;
   canManage: boolean;
   onToggleStar: (channel: Channel) => void;
   onChangeVisibility: (channel: Channel, visibility: string) => void;
@@ -33,6 +34,7 @@ export function ChannelRow({
   channel,
   href,
   active,
+  attention,
   canManage,
   onToggleStar,
   onChangeVisibility,
@@ -60,8 +62,18 @@ export function ChannelRow({
             asChild
           >
             <Link href={href}>
-              <HashMark className="text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate text-left">
+              <HashMark
+                className={cn(
+                  "text-muted-foreground",
+                  attention && "text-foreground",
+                )}
+              />
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate text-left",
+                  attention && "font-semibold",
+                )}
+              >
                 {channel.slug}
               </span>
             </Link>

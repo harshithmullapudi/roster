@@ -4,6 +4,7 @@ import type { Channel, ChannelGroups } from "@roster/api";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { useChannelAttention } from "~/hooks/use-channel-attention";
 import { readCollapsed, writeCollapsed } from "~/utils/sidebar-collapse";
 import { trpc } from "~/utils/trpc";
 
@@ -48,6 +49,7 @@ export function ChannelSections({
   const router = useRouter();
   const [current, setCurrent] = useState(groups);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const attention = useChannelAttention();
 
   useEffect(() => setCurrent(groups), [groups]);
   useEffect(() => setCollapsed(readCollapsed()), []);
@@ -103,6 +105,7 @@ export function ChannelSections({
           open={collapsed[section.key] !== true}
           orgSlug={orgSlug}
           activeChannelSlug={activeChannelSlug}
+          attention={attention}
           canManage={canManage}
           onOpenChange={(open) => setOpen(section.key, open)}
           onToggleStar={toggleStar}
