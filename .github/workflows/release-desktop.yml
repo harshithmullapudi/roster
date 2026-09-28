@@ -6,11 +6,8 @@ on:
     tags:
       - "desktop-v*"
 
-# This repository is private, so its own release assets are not downloadable by
-# the people we hand the app to, and the updater cannot read them either. The
-# build happens here; the artifacts are published to a public releases repo.
-env:
-  RELEASES_REPO: harshithmullapudi/roster-releases
+permissions:
+  contents: write
 
 jobs:
   macos:
@@ -64,8 +61,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/tauri
-          # No tagName: tauri-action only builds. Creating the release is the
-          # next step's job, because it belongs in a different repository.
+          # No tagName: tauri-action only builds. It would upload the .dmg
+          # before the notarization ticket below is stapled onto it, so the
+          # release is cut afterwards instead.
           args: --target universal-apple-darwin
 
       - name: Notarize and staple the disk image
@@ -99,14 +97,13 @@ jobs:
           ARTIFACTS: ${{ steps.build.outputs.artifactPaths }}
         run: node .github/scripts/desktop-release.mjs
 
-      - name: Publish to the public releases repo
+      - name: Publish the release
         env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.collect.outputs.version }}
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" \
-            --repo "$RELEASES_REPO" \
+          gh release create "desktop-v$VERSION" \
             --title "Roster $VERSION" \
             --notes "Roster desktop $VERSION for macOS (Apple silicon and Intel)." \
             release/*

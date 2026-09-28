@@ -2,9 +2,9 @@
  * Turns what `tauri-action` built into a release directory.
  *
  * `tauri-action` writes `latest.json` itself only when it also creates the
- * GitHub release, and it can only create one in the repository it runs in.
- * Roster's code is private and its downloads have to be public, so the release
- * is cut against another repository and the manifest is written here instead.
+ * GitHub release, and letting it do that would upload the .dmg before its
+ * notarization ticket is stapled on. The release is cut by the workflow after
+ * stapling, so the manifest is written here instead.
  */
 
 import {
@@ -24,8 +24,8 @@ const config = JSON.parse(
 );
 const version = config.version;
 
-const releasesRepo = process.env.RELEASES_REPO;
-if (!releasesRepo) throw new Error("RELEASES_REPO is not set");
+const repo = process.env.GITHUB_REPOSITORY;
+if (!repo) throw new Error("GITHUB_REPOSITORY is not set");
 
 const artifacts = JSON.parse(process.env.ARTIFACTS ?? "[]");
 if (artifacts.length === 0) throw new Error("tauri-action produced no artifacts");
@@ -54,7 +54,7 @@ for (const artifact of [dmg, bundle, signature]) {
 }
 
 const downloadUrl = (path) =>
-  `https://github.com/${releasesRepo}/releases/download/v${version}/${basename(path)}`;
+  `https://github.com/${repo}/releases/download/desktop-v${version}/${basename(path)}`;
 
 /**
  * One universal binary serves both architectures, so both platforms point at

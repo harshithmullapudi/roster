@@ -6,10 +6,9 @@ The web app is not one of them — deploying it is
 
 ## The Mac app
 
-The build runs here and publishes to the public
-[`roster-releases`](https://github.com/harshithmullapudi/roster-releases) repo —
-`.dmg` for people, `.app.tar.gz` plus `latest.json` for the updater, which
-installed copies check once at launch.
+The build runs here and publishes a release on this repository against the
+pushed tag — `.dmg` for people, `.app.tar.gz` plus `latest.json` for the
+updater, which installed copies check once at launch.
 
 ```bash
 # bump "version" in apps/tauri/src-tauri/tauri.conf.json, then
@@ -17,17 +16,20 @@ git tag desktop-v0.1.0 && git push origin desktop-v0.1.0
 ```
 
 The tag has to match that version or the workflow stops — a disagreement ships
-an update nobody is offered. `roster-releases` has to be public and hold at
-least one commit; `gh release create` tags a commit, and an empty repository has
-none.
+an update nobody is offered. The updater reads
+`releases/latest/download/latest.json` on this repository, and GitHub's
+`latest` means the newest release of any kind — so desktop releases have to
+stay the only GitHub releases cut here, or every release has to carry a
+`latest.json`.
 
-> The separate repo dates from when this one was private, which made its
-> release assets unreadable to both the people being sent the app and the
-> updater. That is no longer true, so the two could be collapsed —
-> `RELEASES_REPO` and `RELEASES_TOKEN` in `.github/workflows/release-desktop.yml`
-> are what points them apart.
+> Releases up to 0.1.4 live in
+> [`roster-releases`](https://github.com/harshithmullapudi/roster-releases),
+> which existed because this repository used to be private. Installs that old
+> still poll it, so its final release is a `latest.json` whose URLs point at
+> this repository's assets — enough to carry them across once, after which
+> they follow the endpoint baked into the newer build.
 
-Secrets on this repository, all but the last two shared with `core`:
+Secrets on this repository, all but the last one shared with `core`:
 
 | Secret | What it is |
 | --- | --- |
@@ -35,7 +37,6 @@ Secrets on this repository, all but the last two shared with `core`:
 | `APPLE_SIGNING_IDENTITY` | e.g. `Developer ID Application: … (TEAMID)` |
 | `APPLE_ID`, `APPLE_ID_PASSWORD`, `TEAM_ID` | Notarization — the password is an app-specific one |
 | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Updater signing key. **Not** `core`'s: the public half is baked into `tauri.conf.json`, and losing the private half means no installed copy can ever update again |
-| `RELEASES_TOKEN` | A PAT that can create releases on `roster-releases` |
 
 ## The CLI
 

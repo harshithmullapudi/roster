@@ -1,6 +1,6 @@
 [package]
 name = "roster-desktop"
-version = "0.1.4"
+version = "0.1.5"
 description = "Roster Desktop"
 edition = "2021"
 default-run = "roster-desktop"
