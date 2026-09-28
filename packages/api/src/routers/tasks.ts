@@ -4,7 +4,7 @@ import { z } from "zod";
 import { TASK_STATUSES } from "../lib/task-status";
 import { assignTask } from "../services/task-assignment";
 import { listRuns } from "../services/task-recurrence";
-import { listTasks, setTaskStatus } from "../services/tasks";
+import { listTasks, setTaskStatus, upcomingTasks } from "../services/tasks";
 import { createTRPCRouter, memberProcedure } from "../trpc";
 
 const statusSchema = z.enum(TASK_STATUSES);
@@ -18,6 +18,23 @@ export const tasksRouter = createTRPCRouter({
         memberId: ctx.member.id,
         role: ctx.member.role,
         projectId: input?.projectId,
+      }),
+    ),
+
+  upcoming: memberProcedure
+    .input(
+      z.object({
+        projectId: z.string().uuid(),
+        withinMinutes: z.number().int().min(1).max(120).optional(),
+      }),
+    )
+    .query(({ ctx, input }) =>
+      upcomingTasks({
+        organizationId: ctx.organizationId,
+        memberId: ctx.member.id,
+        role: ctx.member.role,
+        projectId: input.projectId,
+        withinMinutes: input.withinMinutes,
       }),
     ),
 
