@@ -289,9 +289,7 @@ export function SessionLevel({
 }
 
 /*
- * One folder → workspace → session breadcrumb serves both the collapsed
- * status bar and the expanded dock header, so the picker never jumps around
- * as the panel opens.
+ * The folder → workspace → session breadcrumb that heads the open dock.
  */
 export function DockHierarchy({
   state,
@@ -325,7 +323,11 @@ export function DockHierarchy({
   );
 
   const folderItem = (entry: DockFolder) => (
-    <SelectItem key={entry.projectId} value={entry.projectId}>
+    <SelectItem
+      key={entry.projectId}
+      value={entry.projectId}
+      className="[&>span:first-child]:hidden"
+    >
       <span className="flex min-w-0 items-center gap-1.5">
         <ChannelMark className="text-muted-foreground shrink-0" />
         <span className="truncate">{entry.channelSlug}</span>
