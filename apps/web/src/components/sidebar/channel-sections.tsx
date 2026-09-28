@@ -97,7 +97,9 @@ export function ChannelSections({
 
   return (
     <div className="flex w-full min-w-0 flex-col">
-      {SECTIONS.map((section) => (
+      {SECTIONS.filter(
+        (section) => section.key !== "starred" || current.starred.length > 0,
+      ).map((section) => (
         <ChannelSection
           key={section.key}
           label={section.label}
