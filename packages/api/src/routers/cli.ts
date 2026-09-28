@@ -18,7 +18,7 @@ import type { ChannelMessage } from "../services/messages";
 import { listMessages, replyCountsByThread } from "../services/messages";
 import { threadDetail, threadProjectId } from "../services/sessions";
 import { assignTask } from "../services/task-assignment";
-import { setTaskStatus } from "../services/tasks";
+import { setTaskStatus, setTaskTitle } from "../services/tasks";
 import { fileTask, type FileTaskRefusal } from "../services/task-filing";
 import { RecurrenceError } from "../lib/recurrence";
 import { cliProcedure, createTRPCRouter } from "../trpc";
@@ -393,6 +393,48 @@ export const cliRouter = createTRPCRouter({
       if ("task" in result) return result.task;
 
       throw refusal(result.refused.reason);
+    }),
+
+  updateTask: cliProcedure
+    .input(
+      z
+        .object({
+          taskId: z.string().uuid(),
+          title: z.string().min(1).max(200).optional(),
+          channelId: z.string().uuid().optional(),
+        })
+        .refine((input) => input.title !== undefined || input.channelId, {
+          message: "Pass --title or --channel-id with what to change.",
+        }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const scope = {
+        organizationId: ctx.organizationId,
+        memberId: ctx.member.id,
+        role: ctx.member.role,
+      };
+
+      let task = null;
+
+      if (input.title !== undefined) {
+        task = await setTaskTitle({ ...scope, taskId: input.taskId, title: input.title });
+        if (!task) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "This key cannot see a task with that id.",
+          });
+        }
+      }
+
+      if (input.channelId) {
+        task = await assignTask({
+          ...scope,
+          taskId: input.taskId,
+          projectId: input.channelId,
+        });
+      }
+
+      return task;
     }),
 
   setTaskStatus: cliProcedure
