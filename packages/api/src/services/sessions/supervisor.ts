@@ -75,6 +75,8 @@ const STALENESS_TIMEOUT_MS = 60_000;
 const STEER_READY_INTERVAL_MS = 500;
 const STEER_READY_TIMEOUT_MS = 120_000;
 const MAX_PUBLISH_HOPS = 3;
+const REST_POLL_INTERVAL_MS = 30_000;
+export const REST_TTL_MS = 60 * 60 * 1000;
 
 const TERMINAL_STATUSES = ["completed", "failed", "canceled"] as const;
 
@@ -157,6 +159,7 @@ interface Watch {
   transcriptChangedAt: number;
   bindingEventAt: number | null;
   bindingChangedAt: number;
+  restingSince: number | null;
 }
 
 const hosts = new Map<string, HostLink>();
@@ -550,6 +553,9 @@ async function wake(sessionId: string): Promise<void> {
   const session = await sessionById(sessionId);
   if (!session) return;
 
+  const watch = watches.get(sessionId);
+  if (watch && watch.restingSince !== null) activateWatch(watch);
+
   const status = await statusAfter(session, "Start");
   if (status === null) return;
 
@@ -765,6 +771,7 @@ function startWatch(args: {
     transcriptChangedAt: Date.now(),
     bindingEventAt: null,
     bindingChangedAt: Date.now(),
+    restingSince: null,
   };
   watches.set(args.sessionId, watch);
   byTerminal.set(args.terminalId, args.sessionId);
@@ -775,6 +782,103 @@ function startWatch(args: {
 
   ensureHostLink(args.hostKey, args.memberId);
   void pollOnce(args.sessionId);
+}
+
+/**
+ * A turn ended at idle, but the harness may still be running sub-agents or
+ * background tasks that re-invoke the agent when they finish. Keep the watch
+ * alive at a slow cadence so that later work still lands in the thread,
+ * instead of vanishing into a terminal nobody reads.
+ */
+function restWatch(watch: Watch): void {
+  if (watch.pollTimer) clearInterval(watch.pollTimer);
+  watch.restingSince = Date.now();
+  watch.pollTimer = setInterval(() => {
+    void restPollOnce(watch.sessionId);
+  }, REST_POLL_INTERVAL_MS);
+}
+
+function activateWatch(watch: Watch): void {
+  if (watch.pollTimer) clearInterval(watch.pollTimer);
+  const now = Date.now();
+  watch.restingSince = null;
+  watch.transcriptChangedAt = now;
+  watch.bindingChangedAt = now;
+  watch.pollTimer = setInterval(() => {
+    void pollOnce(watch.sessionId);
+  }, POLL_INTERVAL_MS);
+}
+
+export function restAction(args: {
+  restingSince: number;
+  now: number;
+  transcriptChanged: boolean;
+  bindingActive: boolean;
+}): "wake" | "stop" | "sleep" {
+  if (args.transcriptChanged || args.bindingActive) return "wake";
+  if (args.now - args.restingSince >= REST_TTL_MS) return "stop";
+  return "sleep";
+}
+
+async function restPollOnce(sessionId: string): Promise<void> {
+  const watch = watches.get(sessionId);
+  if (!watch || watch.restingSince === null) return;
+
+  const session = await sessionById(sessionId);
+  if (!session || isTerminal(session.status)) {
+    stopWatch(sessionId);
+    return;
+  }
+  if (isParked(session.status)) {
+    stopWatch(sessionId);
+    return;
+  }
+  if (!isIdle(session.status)) {
+    activateWatch(watch);
+    return;
+  }
+
+  let transcriptChanged = false;
+  let bindingActive = false;
+  try {
+    const connection = await hostConnection(session);
+    const transcript = await readTranscript({
+      jwt: connection.jwt,
+      routingKey: watch.hostKey,
+      workspaceId: watch.workspaceId,
+      terminalId: watch.terminalId,
+    });
+    transcriptChanged =
+      watch.transcript !== null && transcript.text !== watch.transcript;
+    watch.transcript = transcript.text;
+
+    const bindings = await listAgentBindings({
+      jwt: connection.jwt,
+      routingKey: watch.hostKey,
+      workspaceId: watch.workspaceId,
+    });
+    const binding = bindings.find((b) => b.terminalId === watch.terminalId);
+    bindingActive =
+      binding !== undefined && !bindingIsIdle(binding, SETTLE_DELAY_MS);
+  } catch (cause) {
+    console.warn(
+      `[sessions] rest poll failed for ${sessionId}: ${sessionErrorDetail(cause)}`,
+    );
+    if (workspaceAlreadyGone(cause)) stopWatch(sessionId);
+    return;
+  }
+
+  const action = restAction({
+    restingSince: watch.restingSince,
+    now: Date.now(),
+    transcriptChanged,
+    bindingActive,
+  });
+  if (action === "stop") {
+    stopWatch(sessionId);
+    return;
+  }
+  if (action === "wake") await wake(sessionId);
 }
 
 function stopWatch(sessionId: string): void {
@@ -848,7 +952,11 @@ async function finishOnce(args: {
   const finalText =
     args.capture && watch ? await captureReply(session, watch) : null;
 
-  stopWatch(args.sessionId);
+  if (args.status === "idle" && watch && !isParked(session.status)) {
+    restWatch(watch);
+  } else {
+    stopWatch(args.sessionId);
+  }
   const queued = takeSteers(args.sessionId);
 
   if (isParked(session.status) && !args.evenIfParked) {
