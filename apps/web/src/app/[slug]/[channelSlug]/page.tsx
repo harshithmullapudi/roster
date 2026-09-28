@@ -5,6 +5,7 @@ import {
   listTasks,
   pausedMessageCount,
   threadDetail,
+  upcomingTasks,
 } from "@roster/api";
 import { Button } from "@roster/ui";
 import { Settings } from "lucide-react";
@@ -14,6 +15,7 @@ import { notFound } from "next/navigation";
 import { AppShell } from "~/components/app-shell/app-shell";
 import { ChannelPlaceholder } from "~/components/channels/channel-placeholder";
 import { ChannelTabs } from "~/components/channels/channel-tabs";
+import { UpcomingTaskChip } from "~/components/channels/upcoming-task-chip";
 import { CollapseCompletedToggle } from "~/components/channels/collapse-completed-toggle";
 import { WatchToggle } from "~/components/channels/watch-toggle";
 import { HashMark } from "~/components/logo/hash-mark";
@@ -56,7 +58,7 @@ export default async function ChannelPage({
     ? (tab as ChannelTab)
     : "messages";
 
-  const [messages, tasks, threads, pausedCount] = await Promise.all([
+  const [messages, tasks, threads, pausedCount, upcoming] = await Promise.all([
     activeTab === "messages"
       ? listMessages({ projectId: channel.id, limit: 50 })
       : [],
@@ -73,6 +75,12 @@ export default async function ChannelPage({
     activeTab === "messages" && channel.watchEnabled
       ? pausedMessageCount(channel.id)
       : 0,
+    upcomingTasks({
+      organizationId: organization.id,
+      memberId: member.id,
+      role: member.role,
+      projectId: channel.id,
+    }),
   ]);
 
   const openThread =
@@ -124,11 +132,24 @@ export default async function ChannelPage({
         </span>
       }
       tabs={
-        <ChannelTabs
-          basePath={basePath}
-          channelSlug={channel.slug}
-          active={activeTab}
-        />
+        <span className="flex w-max items-center gap-0.5">
+          <ChannelTabs
+            basePath={basePath}
+            channelSlug={channel.slug}
+            active={activeTab}
+          />
+          <UpcomingTaskChip
+            projectId={channel.id}
+            tasksHref={`${basePath}?tab=tasks&channel=${encodeURIComponent(channel.slug)}`}
+            initial={upcoming
+              .filter((task) => task.nextRunAt)
+              .map((task) => ({
+                id: task.id,
+                title: task.title,
+                nextRunAt: task.nextRunAt!.toISOString(),
+              }))}
+          />
+        </span>
       }
       flush
       rail={
