@@ -24,6 +24,10 @@ export function parseRailLayout(raw: string | null): RailLayout | null {
   return valid ? (layout as RailLayout) : null;
 }
 
+export function railLayoutReady(current: RailLayout): boolean {
+  return RAIL_PANEL_IDS.every((id) => id in current);
+}
+
 export function shouldPersistRailLayout(
   layout: RailLayout,
   isUserInteraction: boolean,
