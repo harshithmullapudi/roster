@@ -442,6 +442,7 @@ const FINISHED_TURN_STATUSES = ["idle", "completed"] as const;
 export interface LiveThread {
   id: string;
   projectId: string;
+  channelSlug: string;
   status: string;
   rootText: string;
   lastProgress: string | null;
@@ -468,6 +469,7 @@ const LIVE_LIMIT = 200;
 interface LiveRow {
   id: string;
   projectId: string;
+  channelSlug: string;
   rootText: string | null;
 }
 
@@ -476,6 +478,7 @@ function workingThreads(scope: ChannelScope): Promise<LiveRow[]> {
     .select({
       id: threads.id,
       projectId: threads.projectId,
+      channelSlug: projects.slug,
       rootText: messages.text,
     })
     .from(threads)
@@ -498,6 +501,7 @@ function unreadTurnThreads(scope: ChannelScope): Promise<LiveRow[]> {
     .select({
       id: threads.id,
       projectId: threads.projectId,
+      channelSlug: projects.slug,
       rootText: messages.text,
     })
     .from(threadSubscriptions)
@@ -541,6 +545,7 @@ export async function listLiveThreads(
       return {
         id: row.id,
         projectId: row.projectId,
+        channelSlug: row.channelSlug,
         status: lead.status ?? "starting",
         rootText: row.rootText ?? "",
         lastProgress: lead.lastProgress,

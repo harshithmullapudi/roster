@@ -3,65 +3,42 @@
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@roster/ui";
 import { SquareTerminal } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { CountFlash } from "~/components/threads/count-flash";
 import { SessionCounts } from "~/components/threads/session-counts";
+import { SessionsHoverCard } from "~/components/threads/sessions-hover-card";
 import {
-  type HoverCardThread,
-  SessionsHoverCard,
-} from "~/components/threads/sessions-hover-card";
-import { countByState, sessionsHeading } from "~/utils/live-threads";
-import {
-  isActive,
-  type ThreadItem,
-  threadsKey,
-  turnUnseen,
-} from "~/utils/thread-rows";
+  countByState,
+  liveThreadsKey,
+  sessionsHeading,
+} from "~/utils/live-threads";
 import { trpc } from "~/utils/trpc";
 
-import { type DockChannel, useDock } from "./dock-provider";
+import { useDock } from "./dock-provider";
 
-function toSessions(threads: ThreadItem[]): HoverCardThread[] {
-  const sessions: HoverCardThread[] = [];
-
-  for (const thread of threads) {
-    const unseen = turnUnseen(thread);
-    if (!unseen && !isActive(thread.status, thread.completedAt)) continue;
-
-    sessions.push({
-      id: thread.id,
-      rootText: thread.rootText,
-      status: thread.status,
-      lastProgress: thread.lastProgress,
-      turnUnseen: unseen,
-    });
-  }
-
-  return sessions;
-}
-
-function ThreadCounts({
-  channel,
-  onOpen,
-}: {
-  channel: DockChannel;
-  onOpen: () => void;
-}) {
-  const { data: threads } = useQuery({
-    queryKey: threadsKey(channel.projectId),
-    queryFn: () => trpc.threads.list.query({ projectId: channel.projectId }),
+/*
+ * The bar counts across every channel the member can see, not just the one on
+ * screen, so it reads the same on Threads and Tasks as it does inside a
+ * channel. Clicking it still opens the dock when a channel is bound, because
+ * that is the only place a terminal can attach; elsewhere it goes to Threads.
+ */
+function OrgCounts({ orgSlug, onOpen }: { orgSlug: string; onOpen: () => void }) {
+  const { data: liveThreads } = useQuery({
+    queryKey: liveThreadsKey(),
+    queryFn: () => trpc.threads.live.query(),
     refetchInterval: 10_000,
   });
 
-  const { data: worktrees } = useQuery({
-    queryKey: ["terminals", "worktrees", channel.projectId],
-    queryFn: () => trpc.terminals.worktrees.query({ projectId: channel.projectId }),
+  const { data: openFolders } = useQuery({
+    queryKey: ["terminals", "open-folders"],
+    queryFn: () => trpc.terminals.openFolders.query(),
     refetchInterval: 15_000,
   });
 
-  const sessions = toSessions(threads ?? []);
+  const sessions = liveThreads ?? [];
   const counts = countByState(sessions);
-  const open = worktrees?.length ?? 0;
+  const open = openFolders ?? 0;
 
   if (open === 0 && sessions.length === 0) return null;
 
@@ -87,8 +64,16 @@ function ThreadCounts({
 
   return (
     <SessionsHoverCard
-      threads={sessions}
-      basePath={`/${channel.orgSlug}/${channel.channelSlug}`}
+      threads={sessions.map((thread) => ({
+        id: thread.id,
+        rootText: thread.rootText,
+        status: thread.status,
+        lastProgress: thread.lastProgress,
+        turnUnseen: thread.turnUnseen,
+        channelSlug: thread.channelSlug,
+        href: `/${orgSlug}/${thread.channelSlug}?thread=${thread.id}`,
+      }))}
+      basePath={`/${orgSlug}/threads`}
       heading={sessionsHeading(counts, sessions.length)}
       side="top"
       align="end"
@@ -98,8 +83,9 @@ function ThreadCounts({
   );
 }
 
-export function DockStatusBar() {
+export function DockStatusBar({ orgSlug }: { orgSlug: string }) {
   const { channel, mode, setMode, toggle } = useDock();
+  const router = useRouter();
 
   return (
     <footer
@@ -108,9 +94,13 @@ export function DockStatusBar() {
         mode === "open" || !channel ? "px-1.5 py-1" : "p-2",
       )}
     >
-      {channel ? (
-        <ThreadCounts channel={channel} onOpen={() => setMode("open")} />
-      ) : null}
+      <OrgCounts
+        orgSlug={orgSlug}
+        onOpen={() => {
+          if (channel) setMode("open");
+          else router.push(`/${orgSlug}/threads`);
+        }}
+      />
 
       <button
         type="button"

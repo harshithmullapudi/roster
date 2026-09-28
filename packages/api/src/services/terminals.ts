@@ -1,4 +1,4 @@
-import { db, messages, threadSessions, threads } from "@roster/db";
+import { db, messages, projects, threadSessions, threads } from "@roster/db";
 import {
   createTerminal,
   type HostAgent,
@@ -11,9 +11,9 @@ import {
   terminalSocketUrl,
   writeTerminalInput,
 } from "@roster/superset";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 
-import { requireOrgProject } from "./channels";
+import { requireOrgProject, visibleToMember } from "./channels";
 import { resolveOrgAccess } from "./org";
 import { hostConnection } from "./sessions/connection";
 
@@ -25,9 +25,13 @@ export interface Worktree {
   label: string;
   status: string;
   startedAt: Date;
+  closedAt: Date | null;
 }
 
-export async function listWorktrees(projectId: string): Promise<Worktree[]> {
+export async function listWorktrees(
+  projectId: string,
+  options?: { includeClosed?: boolean },
+): Promise<Worktree[]> {
   const rows = await db
     .select({
       workspaceId: threadSessions.supersetWorkspaceId,
@@ -37,6 +41,7 @@ export async function listWorktrees(projectId: string): Promise<Worktree[]> {
       label: messages.text,
       status: threadSessions.status,
       startedAt: threadSessions.startedAt,
+      closedAt: threadSessions.workspaceReapedAt,
     })
     .from(threadSessions)
     .innerJoin(threads, eq(threadSessions.threadId, threads.id))
@@ -44,7 +49,9 @@ export async function listWorktrees(projectId: string): Promise<Worktree[]> {
     .where(
       and(
         eq(threadSessions.projectId, projectId),
-        isNull(threadSessions.workspaceReapedAt),
+        options?.includeClosed
+          ? undefined
+          : isNull(threadSessions.workspaceReapedAt),
       ),
     )
     .orderBy(desc(threadSessions.startedAt));
@@ -60,10 +67,32 @@ export async function listWorktrees(projectId: string): Promise<Worktree[]> {
             label: row.label.trim(),
             status: row.status,
             startedAt: row.startedAt,
+            closedAt: row.closedAt,
           },
         ]
       : [],
   );
+}
+
+export async function countOpenWorktrees(scope: {
+  organizationId: string;
+  memberId: string;
+  role: string;
+}): Promise<number> {
+  const rows = await db
+    .select({ workspaceId: threadSessions.supersetWorkspaceId })
+    .from(threadSessions)
+    .innerJoin(projects, eq(threadSessions.projectId, projects.id))
+    .where(
+      and(
+        eq(projects.organizationId, scope.organizationId),
+        visibleToMember(scope.memberId, scope.role),
+        isNull(threadSessions.workspaceReapedAt),
+        isNotNull(threadSessions.supersetWorkspaceId),
+      ),
+    );
+
+  return new Set(rows.map((row) => row.workspaceId)).size;
 }
 
 async function ownedWorktree(args: {

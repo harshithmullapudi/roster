@@ -11,6 +11,7 @@ import {
 const thread = (over: Partial<LiveThreadItem> = {}): LiveThreadItem => ({
   id: "t1",
   projectId: "p1",
+  channelSlug: "general",
   status: "running",
   rootText: "Ship the sidebar",
   lastProgress: null,

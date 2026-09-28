@@ -6,11 +6,15 @@ import {
   cn,
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@roster/ui";
 import { Maximize2, X } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
@@ -22,6 +26,13 @@ import { SessionTabs } from "./session-tabs";
 import { TerminalView } from "./terminal-view";
 
 const MIN_HEIGHT = 160;
+
+/*
+ * A channel can accumulate closed folders forever, so the picker keeps only
+ * the freshest few — enough to find the thread you were just in, not an
+ * archive.
+ */
+const CLOSED_LIMIT = 10;
 
 function worktreeLabel(label: string): string {
   const firstLine = label.split("\n")[0]?.trim() ?? "";
@@ -35,20 +46,34 @@ export function TerminalDock() {
   const projectId = channel?.projectId ?? null;
 
   const { data: worktrees } = useQuery({
-    queryKey: ["terminals", "worktrees", projectId],
-    queryFn: () => trpc.terminals.worktrees.query({ projectId: projectId as string }),
+    queryKey: ["terminals", "worktrees", projectId, "all"],
+    queryFn: () =>
+      trpc.terminals.worktrees.query({
+        projectId: projectId as string,
+        includeClosed: true,
+      }),
     enabled: Boolean(projectId) && mode !== "closed",
     refetchInterval: 15_000,
   });
 
+  const { openWorktrees, closedWorktrees } = useMemo(() => {
+    const all = worktrees ?? [];
+    return {
+      openWorktrees: all.filter((worktree) => !worktree.closedAt),
+      closedWorktrees: all
+        .filter((worktree) => worktree.closedAt)
+        .slice(0, CLOSED_LIMIT),
+    };
+  }, [worktrees]);
+
   const activeWorktree = useMemo(() => {
-    if (!worktrees?.length) return null;
-    const chosen = worktrees.find(
+    const chosen = [...openWorktrees, ...closedWorktrees].find(
       (worktree) => worktree.workspaceId === selection?.workspaceId,
     );
-    return chosen ?? worktrees[0] ?? null;
-  }, [worktrees, selection]);
+    return chosen ?? openWorktrees[0] ?? null;
+  }, [openWorktrees, closedWorktrees, selection]);
 
+  const isClosed = Boolean(activeWorktree?.closedAt);
   const workspaceId = activeWorktree?.workspaceId ?? null;
 
   const { data: sessions } = useQuery({
@@ -58,13 +83,13 @@ export function TerminalDock() {
         projectId: projectId as string,
         workspaceId: workspaceId as string,
       }),
-    enabled: Boolean(projectId && workspaceId) && mode !== "closed",
+    enabled: Boolean(projectId && workspaceId) && !isClosed && mode !== "closed",
     refetchInterval: 10_000,
   });
 
   const live = useMemo(
-    () => (sessions ?? []).filter((session) => !session.exited),
-    [sessions],
+    () => (isClosed ? [] : (sessions ?? []).filter((session) => !session.exited)),
+    [sessions, isClosed],
   );
 
   const activeTerminalId = useMemo(() => {
@@ -152,26 +177,71 @@ export function TerminalDock() {
             <SelectValue placeholder="No threads yet" />
           </SelectTrigger>
           <SelectContent className="max-w-72">
-            {(worktrees ?? []).map((worktree) => (
-              <SelectItem key={worktree.workspaceId} value={worktree.workspaceId}>
-                <span className="block truncate">
-                  {worktreeLabel(worktree.label)}
-                </span>
-              </SelectItem>
-            ))}
+            {closedWorktrees.length > 0 ? (
+              <SelectGroup>
+                <SelectLabel className="text-muted-foreground text-xs font-medium">
+                  Open
+                </SelectLabel>
+                {openWorktrees.map((worktree) => (
+                  <SelectItem
+                    key={worktree.workspaceId}
+                    value={worktree.workspaceId}
+                  >
+                    <span className="block truncate">
+                      {worktreeLabel(worktree.label)}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ) : (
+              openWorktrees.map((worktree) => (
+                <SelectItem
+                  key={worktree.workspaceId}
+                  value={worktree.workspaceId}
+                >
+                  <span className="block truncate">
+                    {worktreeLabel(worktree.label)}
+                  </span>
+                </SelectItem>
+              ))
+            )}
+
+            {closedWorktrees.length > 0 ? (
+              <>
+                {openWorktrees.length > 0 ? <SelectSeparator /> : null}
+                <SelectGroup>
+                  <SelectLabel className="text-muted-foreground text-xs font-medium">
+                    Closed
+                  </SelectLabel>
+                  {closedWorktrees.map((worktree) => (
+                    <SelectItem
+                      key={worktree.workspaceId}
+                      value={worktree.workspaceId}
+                      className="text-muted-foreground"
+                    >
+                      <span className="block truncate">
+                        {worktreeLabel(worktree.label)}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </>
+            ) : null}
           </SelectContent>
         </Select>
 
-        <SessionTabs
-          sessions={live}
-          activeTerminalId={activeTerminalId}
-          onSelect={(terminalId) =>
-            workspaceId && select({ workspaceId, terminalId })
-          }
-          onClose={(terminalId) => void closeSession(terminalId)}
-        />
+        {isClosed ? null : (
+          <SessionTabs
+            sessions={live}
+            activeTerminalId={activeTerminalId}
+            onSelect={(terminalId) =>
+              workspaceId && select({ workspaceId, terminalId })
+            }
+            onClose={(terminalId) => void closeSession(terminalId)}
+          />
+        )}
 
-        {workspaceId ? (
+        {workspaceId && !isClosed ? (
           <NewSessionPopover
             projectId={projectId}
             workspaceId={workspaceId}
@@ -186,9 +256,9 @@ export function TerminalDock() {
           variant="ghost"
           className="!h-6 !rounded-md px-1.5"
           aria-label="Open full screen"
-          disabled={!activeWorktree}
+          disabled={!activeWorktree || isClosed}
           onClick={() => {
-            if (!activeWorktree) return;
+            if (!activeWorktree || isClosed) return;
             setMode("closed");
             router.push(
               `/${channel.orgSlug}/${channel.channelSlug}/thread/${activeWorktree.threadId}/session`,
@@ -208,7 +278,20 @@ export function TerminalDock() {
       </div>
 
       <div className="min-h-0 flex-1 bg-[#0a0a0a]">
-        {workspaceId && activeTerminalId ? (
+        {isClosed && activeWorktree ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2">
+            <p className="text-muted-foreground text-xs">
+              This folder was cleaned up after the thread went quiet.
+            </p>
+            <Link
+              href={`/${channel.orgSlug}/${channel.channelSlug}?thread=${activeWorktree.threadId}`}
+              className="text-primary text-xs hover:underline"
+              onClick={() => setMode("closed")}
+            >
+              View thread →
+            </Link>
+          </div>
+        ) : workspaceId && activeTerminalId ? (
           <TerminalView
             key={activeTerminalId}
             orgSlug={channel.orgSlug}
@@ -219,9 +302,11 @@ export function TerminalDock() {
         ) : (
           <div className="flex h-full items-center justify-center">
             <p className="text-muted-foreground text-xs">
-              {worktrees?.length
+              {openWorktrees.length
                 ? "No agents in this thread’s worktree — start one with +"
-                : "No worktrees yet. One appears when an agent replies in a thread."}
+                : closedWorktrees.length
+                  ? "No open folders — pick a closed one to find its thread."
+                  : "No worktrees yet. One appears when an agent replies in a thread."}
             </p>
           </div>
         )}
