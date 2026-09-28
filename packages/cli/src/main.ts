@@ -31,6 +31,7 @@ const USAGE = `roster — talk to Roster from inside an agent session
   roster tasks create <title> [--channel-id ID]
                              [--rrule RULE] [--at HH:MM] [--timezone TZ]
   roster tasks status <task-id> <todo|in_progress|done>
+  roster tasks update <task-id> [--title TEXT] [--channel-id ID]
   roster ask <handle> <task> --thread THREAD_ID
   roster react <message-id> <emoji>         add or remove a reaction
   roster files download <url-or-id> [--out PATH]
@@ -38,6 +39,11 @@ const USAGE = `roster — talk to Roster from inside an agent session
 Pass --channel-id only when someone named the channel the work belongs to;
 that channel's agent starts on it right away. Without it the task waits in
 the backlog for a person to assign.
+
+\`tasks update\` renames a task or hands it to a channel after the fact.
+Giving it --channel-id starts that channel's agent on it, the same as
+creating it there would have; a task a thread is already working on
+cannot be moved.
 
 A task repeats when you give it --rrule. The task itself comes back round:
 its status resets and it posts in the channel again on every occurrence.
@@ -349,6 +355,36 @@ async function setTaskStatus(
   console.log(`"${task.title}" is now ${task.status}.`);
 }
 
+async function updateTask(parsed: ReturnType<typeof parseArgs>): Promise<void> {
+  const config = requireConfig();
+
+  const taskId = parsed.positionals[2];
+  if (!taskId) {
+    throw new RosterError(
+      "Say which task, e.g. `roster tasks update <task-id> --title \"...\"`. Your task id is in the <roster> block.",
+    );
+  }
+
+  const title = flagString(parsed, "title");
+  const channelId = flagString(parsed, "channel-id");
+
+  if (title === undefined && channelId === undefined) {
+    throw new RosterError("Pass --title or --channel-id with what to change.");
+  }
+
+  const task = (await mutate(config, "cli.updateTask", {
+    taskId,
+    title,
+    channelId,
+  })) as { id: string; title: string; channelSlug: string | null };
+
+  console.log(
+    channelId
+      ? `"${task.title}" (${task.id}) moved to #${task.channelSlug}, which started on it.`
+      : `"${task.title}" (${task.id}) updated.`,
+  );
+}
+
 async function ask(parsed: ReturnType<typeof parseArgs>): Promise<void> {
   const config = requireConfig();
 
@@ -442,6 +478,7 @@ export async function main(argv: string[]): Promise<number> {
     else if (command === "read" && sub === "messages") await readMessages(parsed);
     else if (command === "tasks" && sub === "create") await createTask(parsed);
     else if (command === "tasks" && sub === "status") await setTaskStatus(parsed);
+    else if (command === "tasks" && sub === "update") await updateTask(parsed);
     else if (command === "ask") await ask(parsed);
     else if (command === "react") await react(parsed);
     else if (command === "files" && sub === "download") await filesDownload(parsed);

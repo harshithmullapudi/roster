@@ -171,6 +171,20 @@ export async function setTaskStatus(
   return findById(task.id);
 }
 
+export async function setTaskTitle(
+  args: ChannelScope & { taskId: string; title: string },
+): Promise<Task | null> {
+  const task = await reachableTask(args);
+  if (!task) return null;
+
+  await db
+    .update(tasks)
+    .set({ title: args.title, updatedAt: new Date() })
+    .where(eq(tasks.id, task.id));
+
+  return findById(task.id);
+}
+
 export async function reachableTask(
   args: ChannelScope & { taskId: string },
 ): Promise<Task | null> {

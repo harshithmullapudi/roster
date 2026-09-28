@@ -37,6 +37,7 @@ roster read messages --channel-id ID [--limit N]
 roster read messages --thread-id ID [--limit N]
 roster tasks create <title> [--channel-id ID]
 roster tasks status <task-id> <todo|in_progress|done>
+roster tasks update <task-id> [--title TEXT] [--channel-id ID]
 roster ask <handle> <task> --thread THREAD_ID
 roster files download <url-or-id> [--out PATH]
 ```
@@ -54,6 +55,10 @@ attachment id works too, and `--out` naming a directory means "in here".
 Pass `--channel-id` to `tasks create` only when someone named the channel the
 work belongs to; that channel's agent starts on it right away. Without it the
 task waits in the backlog for a person to assign.
+
+`tasks update` renames a task or hands it to a channel after the fact — the
+channel starts on it right away, the same as creating it there would have. A
+task a thread is already working on cannot be moved.
 
 `roster ask` returns immediately. Say what you asked for and end your turn —
 you are resumed automatically with the answer. Never poll.
