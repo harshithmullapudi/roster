@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 
 import { AppShell } from "~/components/app-shell/app-shell";
 import { ChannelSettings } from "~/components/channels/channel-settings";
-import { HashMark } from "~/components/logo/hash-mark";
+import { ChannelMark } from "~/components/logo/channel-mark";
 import { loadShell } from "~/lib/shell";
 
 export default async function ChannelSettingsPage({
@@ -34,7 +34,7 @@ export default async function ChannelSettingsPage({
       activeChannelSlug={channel.slug}
       title={
         <span className="flex min-w-0 items-center gap-2">
-          <HashMark className="text-muted-foreground" />
+          <ChannelMark className="text-muted-foreground" />
           <span className="truncate">{channel.slug}</span>
           <span className="text-muted-foreground shrink-0">/ Settings</span>
         </span>

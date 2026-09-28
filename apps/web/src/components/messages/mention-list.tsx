@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 
-import { HashMark } from "~/components/logo/hash-mark";
+import { ChannelMark } from "~/components/logo/channel-mark";
 import {
   type MentionAttrs,
   mentionAttrs,
@@ -80,7 +80,7 @@ export const MentionList = forwardRef<
           ) : item.visibility === "private" ? (
             <Lock className="text-muted-foreground size-3.5 shrink-0" />
           ) : (
-            <HashMark className="text-muted-foreground" />
+            <ChannelMark className="text-muted-foreground" />
           )}
           <span className="text-foreground font-medium">{item.handle}</span>
           <span className="text-muted-foreground ml-auto truncate text-xs">

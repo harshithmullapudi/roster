@@ -8,6 +8,8 @@ import {
   prepareDesktopNotifications,
   showDesktopNotification,
 } from "~/utils/desktop-notify";
+import { inboxThreadsKey } from "~/utils/channel-attention";
+import { liveThreadsKey } from "~/utils/live-threads";
 import {
   applyUnreadDelta,
   parsePublishedNotification,
@@ -84,6 +86,8 @@ export function useUserRealtime(): void {
         queryClient.setQueryData<number>(unreadCountKey(), (previous) =>
           applyUnreadDelta(previous, 1),
         );
+        void queryClient.invalidateQueries({ queryKey: liveThreadsKey() });
+        void queryClient.invalidateQueries({ queryKey: inboxThreadsKey() });
 
         void showDesktopNotification(item);
       });

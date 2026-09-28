@@ -2,17 +2,18 @@
 
 import type { InboxThread } from "@roster/api";
 import { cn } from "@roster/ui";
-import { AtSign, BellOff, Hash, MessagesSquare } from "lucide-react";
+import { AtSign, BellOff, Folder, MessagesSquare } from "lucide-react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 
+import { inboxThreadsKey } from "~/utils/channel-attention";
 import {
   groupInboxThreads,
   isUnread,
   subscriptionLabel,
 } from "~/utils/inbox-threads";
-import { threadTitle } from "~/utils/live-threads";
+import { liveThreadsKey, threadTitle } from "~/utils/live-threads";
 import { relativeTime } from "~/utils/relative-time";
 import { unreadCountKey } from "~/utils/notification-cache";
 import { replyCountLabel } from "~/utils/thread-rows";
@@ -33,6 +34,8 @@ function useClearUnreadOnOpen(): void {
       .then(() => {
         if (disposed) return;
         queryClient.setQueryData<number>(unreadCountKey(), 0);
+        void queryClient.invalidateQueries({ queryKey: liveThreadsKey() });
+        void queryClient.invalidateQueries({ queryKey: inboxThreadsKey() });
       })
       .catch(() => {
         queryClient.invalidateQueries({ queryKey: unreadCountKey() });
@@ -78,7 +81,7 @@ function ThreadRow({
             )}
           />
           <span className="text-muted-foreground flex min-w-0 items-center gap-0.5 text-xs">
-            <Hash size={11} className="shrink-0" />
+            <Folder size={11} className="shrink-0" />
             <span className="truncate">{thread.channelName}</span>
           </span>
 

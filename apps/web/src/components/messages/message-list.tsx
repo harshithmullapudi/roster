@@ -1,6 +1,6 @@
 "use client";
 
-import { Hash, Loader2 } from "lucide-react";
+import { Folder, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Virtuoso } from "react-virtuoso";
 
@@ -127,7 +127,7 @@ export function MessageList({
   if (empty) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 px-5 py-10">
-        <Hash className="text-muted-foreground size-5" />
+        <Folder className="text-muted-foreground size-5" />
         <p className="text-base font-medium">This is #{channelName}</p>
         <p className="text-muted-foreground text-sm">
           Send the first message to get things going.

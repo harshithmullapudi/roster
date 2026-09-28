@@ -18,7 +18,7 @@ import { ChannelTabs } from "~/components/channels/channel-tabs";
 import { UpcomingTaskChip } from "~/components/channels/upcoming-task-chip";
 import { CollapseCompletedToggle } from "~/components/channels/collapse-completed-toggle";
 import { WatchToggle } from "~/components/channels/watch-toggle";
-import { HashMark } from "~/components/logo/hash-mark";
+import { ChannelMark } from "~/components/logo/channel-mark";
 import { MessagePanel } from "~/components/messages/message-panel";
 import { DockChannelBinding } from "~/components/terminals/dock-provider";
 import { ThreadSidebar } from "~/components/threads/thread-sidebar";
@@ -104,7 +104,7 @@ export default async function ChannelPage({
       activeChannelSlug={channel.slug}
       title={
         <span className="flex min-w-0 items-center gap-2">
-          <HashMark className="text-muted-foreground" />
+          <ChannelMark className="text-muted-foreground" />
           <span className="truncate">{channel.slug}</span>
         </span>
       }
