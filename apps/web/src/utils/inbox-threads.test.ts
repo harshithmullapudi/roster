@@ -127,6 +127,10 @@ describe("parseInboxFilter", () => {
   it("recognizes all", () => {
     expect(parseInboxFilter("all")).toBe("all");
   });
+
+  it("recognizes needs-input", () => {
+    expect(parseInboxFilter("needs-input")).toBe("needs-input");
+  });
 });
 
 describe("filterInboxThreads", () => {
@@ -148,6 +152,17 @@ describe("filterInboxThreads", () => {
       "read",
       "muted",
     ]);
+  });
+
+  it("keeps only threads waiting on input for the needs-input filter", () => {
+    const mixed = [
+      thread({ id: "waiting", status: "needs_input" }),
+      thread({ id: "done", status: "completed" }),
+      thread({ id: "waiting-read", status: "needs_input", unread: false }),
+    ];
+    expect(
+      filterInboxThreads(mixed, "needs-input").map((row) => row.id),
+    ).toEqual(["waiting", "waiting-read"]);
   });
 
   it("keeps threads that were unread when the page opened", () => {

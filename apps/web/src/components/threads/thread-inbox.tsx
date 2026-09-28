@@ -157,13 +157,25 @@ function EmptyInbox() {
   );
 }
 
-function CaughtUp({ onShowAll }: { onShowAll: () => void }) {
+function CaughtUp({
+  filter,
+  onShowAll,
+}: {
+  filter: InboxFilter;
+  onShowAll: () => void;
+}) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
       <MessagesSquare className="text-muted-foreground size-7" />
-      <p className="text-sm font-medium">You&apos;re all caught up</p>
+      <p className="text-sm font-medium">
+        {filter === "needs-input"
+          ? "Nothing needs your input"
+          : "You're all caught up"}
+      </p>
       <p className="text-muted-foreground max-w-xs text-sm">
-        Nothing unread right now. New activity in your threads lands here.
+        {filter === "needs-input"
+          ? "Threads show up here when an agent is waiting on an answer from you."
+          : "Nothing unread right now. New activity in your threads lands here."}
       </p>
       <button
         type="button"
@@ -178,6 +190,7 @@ function CaughtUp({ onShowAll }: { onShowAll: () => void }) {
 
 const FILTERS: { value: InboxFilter; label: string }[] = [
   { value: "unread", label: "Unread" },
+  { value: "needs-input", label: "Needs input" },
   { value: "all", label: "All" },
 ];
 
@@ -244,7 +257,7 @@ export function ThreadInbox({ threads, orgSlug }: ThreadInboxProps) {
     <div className="flex min-h-0 flex-1 flex-col">
       <FilterBar filter={filter} onChange={setFilter} />
       {groups.length === 0 ? (
-        <CaughtUp onShowAll={() => setFilter("all")} />
+        <CaughtUp filter={filter} onShowAll={() => setFilter("all")} />
       ) : (
         <div className="overscroll-contain min-h-0 flex-1 overflow-y-auto">
           <div className="pb-safe-2 flex w-full flex-col gap-4 p-1 sm:p-2">
