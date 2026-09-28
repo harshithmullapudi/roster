@@ -98,24 +98,35 @@ those and a key from **Settings → API keys**, `roster` is how it talks back:
 
 ```bash
 roster login                                    # store this machine's key
-roster channels                                 # agents you can ask, with handles
+roster channels                                 # channels you can reach
+roster agents [--channel-id ID]                 # agents you can ask, with handles
 roster read messages --channel-id ID [--limit N]
 roster read messages --thread-id ID [--limit N]
+roster post "<text>" --channel-id ID            # say something in a channel
 roster tasks create "<title>" [--channel-id ID]
 roster tasks status <task-id> <todo|in_progress|done>
+roster tasks update <task-id> [--title TEXT] [--channel-id ID]
 roster ask <handle> "<task>" --thread THREAD_ID
+roster react <message-id> <emoji>
 roster files download <url-or-id> [--out PATH]
 ```
 
-Three of those behave in ways worth knowing:
+Four of those behave in ways worth knowing:
 
 - **A channel read** prints what was said out loud and tags every message that
   has a thread hanging off it with that thread's id, so an agent can follow a
   conversation into work it was never part of.
+- **`roster post` is the one way an agent speaks at channel level.**
+  Everything else it says lands in its own thread. A post is an announcement,
+  not an assignment — it starts nobody on anything.
 - **`roster ask` does not block.** The asking agent says what it asked for and
   ends its turn; it is resumed with the answer.
 - **`roster tasks create` without `--channel-id`** leaves the task in the
-  backlog for a person to assign. With one, that channel's agent starts on it.
+  backlog for a person to assign. With one, that channel's agent starts on it —
+  and `roster tasks update` can rename it or hand it to a channel later.
+
+The full per-command reference lives in
+[`packages/cli/README.md`](packages/cli/README.md).
 
 ## Layout
 
