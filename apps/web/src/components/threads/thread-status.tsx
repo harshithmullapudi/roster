@@ -45,9 +45,9 @@ export function ThreadStatus({ status, strong }: ThreadStatusProps) {
   // gets a chip loud enough to scan for instead of the quiet pip.
   if (needsInput(status)) {
     return (
-      <span className="bg-warning/15 flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5">
+      <span className="bg-warning/15 flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1">
         <span className="bg-warning size-1.5 rounded-full" />
-        <span className="text-foreground text-xs font-medium">
+        <span className="text-foreground text-sm font-medium">
           Needs input
         </span>
       </span>

@@ -1,7 +1,7 @@
 "use client";
 
 import type { InboxThread } from "@roster/api";
-import { cn } from "@roster/ui";
+import { Button, cn } from "@roster/ui";
 import { AtSign, BellOff, Folder, MessagesSquare } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -202,21 +202,21 @@ function FilterBar({
   onChange: (filter: InboxFilter) => void;
 }) {
   return (
-    <div className="border-border flex shrink-0 items-center gap-1 border-b px-2 py-1.5 sm:px-3">
+    <div className="border-border flex shrink-0 items-center gap-0.5 border-b px-2 py-1.5 sm:px-3">
       {FILTERS.map(({ value, label }) => (
-        <button
+        <Button
           key={value}
-          type="button"
+          variant="ghost"
+          isActive={filter === value}
           onClick={() => onChange(value)}
+          aria-pressed={filter === value}
           className={cn(
-            "rounded-md px-2 py-0.5 text-xs transition-colors",
-            filter === value
-              ? "bg-accent text-foreground font-medium"
-              : "text-muted-foreground hover:text-foreground",
+            "text-muted-foreground shrink-0 !rounded-md px-2 text-sm",
+            filter === value && "!bg-accent !text-accent-foreground",
           )}
         >
           {label}
-        </button>
+        </Button>
       ))}
     </div>
   );
