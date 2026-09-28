@@ -73,10 +73,9 @@ type LiveSession = Awaited<
 >[number];
 
 export function useDockHierarchy(): DockHierarchyState {
-  const { folder, pickFolder, mode, selection, select } = useDock();
+  const { folder, pickFolder, selection, select } = useDock();
   const queryClient = useQueryClient();
   const projectId = folder?.projectId ?? null;
-  const open = mode === "open";
 
   const { data: channelGroups } = useQuery({
     queryKey: ["channels", "list"],
@@ -104,7 +103,7 @@ export function useDockHierarchy(): DockHierarchyState {
         includeClosed: true,
       }),
     enabled: Boolean(projectId),
-    refetchInterval: open ? 15_000 : 30_000,
+    refetchInterval: 15_000,
   });
 
   const { openWorktrees, closedWorktrees } = useMemo(() => {
@@ -135,7 +134,7 @@ export function useDockHierarchy(): DockHierarchyState {
         workspaceId: workspaceId as string,
       }),
     enabled: Boolean(projectId && workspaceId) && !isClosed,
-    refetchInterval: open ? 10_000 : 30_000,
+    refetchInterval: 10_000,
   });
 
   const live = useMemo(
