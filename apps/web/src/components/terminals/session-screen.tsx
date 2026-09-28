@@ -14,10 +14,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
+import { ChannelMark } from "~/components/logo/channel-mark";
 import { errorMessage, trpc } from "~/utils/trpc";
 
-import { NewSessionPopover } from "./new-session-popover";
-import { SessionTabs } from "./session-tabs";
+import {
+  HIERARCHY_TRIGGER_CLASS,
+  HierarchySeparator,
+  SessionLevel,
+} from "./dock-hierarchy";
 import { TerminalView } from "./terminal-view";
 
 export interface SessionScreenThread {
@@ -82,10 +86,13 @@ export function SessionScreen({
 
   return (
     <div className="bg-background-2 flex h-full flex-col">
-      <div className="flex shrink-0 items-center gap-1.5 p-1.5">
-        <span className="text-muted-foreground shrink-0 px-1 text-xs">
-          #{channelSlug}
+      <div className="flex shrink-0 items-center gap-1 p-1.5">
+        <span className="text-muted-foreground flex shrink-0 items-center gap-1.5 px-2 text-xs">
+          <ChannelMark className="shrink-0" />
+          <span>{channelSlug}</span>
         </span>
+
+        <HierarchySeparator />
 
         <Select
           value={threadId}
@@ -93,10 +100,7 @@ export function SessionScreen({
             router.push(`/${orgSlug}/${channelSlug}/thread/${next}/session`)
           }
         >
-          <SelectTrigger
-            showIcon
-            className="!h-6 !min-h-6 w-44 shrink-0 px-2 text-xs"
-          >
+          <SelectTrigger showIcon className={HIERARCHY_TRIGGER_CLASS}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="max-w-72">
@@ -108,14 +112,13 @@ export function SessionScreen({
           </SelectContent>
         </Select>
 
-        <SessionTabs
-          sessions={live}
+        <HierarchySeparator />
+
+        <SessionLevel
+          live={live}
           activeTerminalId={activeTerminalId}
           onSelect={setPicked}
           onClose={(terminalId) => void closeSession(terminalId)}
-        />
-
-        <NewSessionPopover
           projectId={projectId}
           workspaceId={workspaceId}
           onStarted={(terminalId) => {
@@ -123,6 +126,8 @@ export function SessionScreen({
             refreshSessions();
           }}
         />
+
+        <span className="flex-1" />
 
         <Button
           variant="ghost"

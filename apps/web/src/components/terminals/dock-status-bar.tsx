@@ -3,7 +3,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@roster/ui";
 import { SquareTerminal } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 import { CountFlash } from "~/components/threads/count-flash";
 import { SessionCounts } from "~/components/threads/session-counts";
@@ -15,13 +14,13 @@ import {
 } from "~/utils/live-threads";
 import { trpc } from "~/utils/trpc";
 
+import { DockHierarchy, useDockHierarchy } from "./dock-hierarchy";
 import { useDock } from "./dock-provider";
 
 /*
  * The bar counts across every channel the member can see, not just the one on
  * screen, so it reads the same on Threads and Tasks as it does inside a
- * channel. Clicking it still opens the dock when a channel is bound, because
- * that is the only place a terminal can attach; elsewhere it goes to Threads.
+ * channel. Clicking it opens the dock — the folder picker works everywhere.
  */
 function OrgCounts({ orgSlug, onOpen }: { orgSlug: string; onOpen: () => void }) {
   const { data: liveThreads } = useQuery({
@@ -83,38 +82,43 @@ function OrgCounts({ orgSlug, onOpen }: { orgSlug: string; onOpen: () => void })
   );
 }
 
+/*
+ * The same breadcrumb the dock header uses, so opening the panel reads as the
+ * bar expanding rather than a different control appearing. It only renders
+ * while the dock is closed — open, the dock header owns it.
+ */
+function CollapsedHierarchy() {
+  const { setMode } = useDock();
+  const state = useDockHierarchy();
+
+  return <DockHierarchy state={state} onEngage={() => setMode("open")} />;
+}
+
 export function DockStatusBar({ orgSlug }: { orgSlug: string }) {
-  const { channel, mode, setMode, toggle } = useDock();
-  const router = useRouter();
+  const { mode, setMode, toggle } = useDock();
 
   return (
     <footer
       className={cn(
-        "flex shrink-0 items-center justify-end gap-2",
-        mode === "open" || !channel ? "px-1.5 py-1" : "p-2",
+        "flex shrink-0 items-center justify-between gap-2",
+        mode === "open" ? "px-1.5 py-1" : "p-1.5",
       )}
     >
-      <OrgCounts
-        orgSlug={orgSlug}
-        onOpen={() => {
-          if (channel) setMode("open");
-          else router.push(`/${orgSlug}/threads`);
-        }}
-      />
+      {mode === "closed" ? <CollapsedHierarchy /> : <span />}
 
-      <button
-        type="button"
-        onClick={toggle}
-        disabled={!channel}
-        aria-label="Toggle agent sessions"
-        className={cn(
-          "text-muted-foreground hover:bg-accent hover:text-foreground flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
-          !channel && "pointer-events-none opacity-40",
-        )}
-      >
-        <SquareTerminal size={13} />
-        <span>Agent</span>
-      </button>
+      <div className="flex min-w-0 items-center gap-2">
+        <OrgCounts orgSlug={orgSlug} onOpen={() => setMode("open")} />
+
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label="Toggle agent sessions"
+          className="text-muted-foreground hover:bg-accent hover:text-foreground flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors"
+        >
+          <SquareTerminal size={13} />
+          <span>Agent</span>
+        </button>
+      </div>
     </footer>
   );
 }
