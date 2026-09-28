@@ -1,6 +1,6 @@
 {
-  "id": "86c18116-5db2-497a-af56-69582fc25b0d",
-  "prevId": "dfebca66-da16-4fbb-88bc-f4d4a9183b14",
+  "id": "e627a1b4-be66-4b1f-90d0-5acacd7f4070",
+  "prevId": "fb52e9a3-c96b-478d-a5f9-1db7a2c4575e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -314,6 +314,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "ephemeral": {
+          "name": "ephemeral",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "archived_at": {
           "name": "archived_at",
@@ -1080,6 +1087,111 @@
             "id"
           ],
           "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "roster.channel_reads": {
+      "name": "channel_reads",
+      "schema": "roster",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "channel_reads_member_project_idx": {
+          "name": "channel_reads_member_project_idx",
+          "columns": [
+            {
+              "expression": "member_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "channel_reads_member_idx": {
+          "name": "channel_reads_member_idx",
+          "columns": [
+            {
+              "expression": "member_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "channel_reads_member_id_members_id_fk": {
+          "name": "channel_reads_member_id_members_id_fk",
+          "tableFrom": "channel_reads",
+          "tableTo": "members",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "channel_reads_project_id_projects_id_fk": {
+          "name": "channel_reads_project_id_projects_id_fk",
+          "tableFrom": "channel_reads",
+          "tableTo": "projects",
+          "schemaTo": "roster",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },

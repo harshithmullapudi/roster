@@ -7,7 +7,6 @@ import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 
-import { inboxThreadsKey } from "~/utils/channel-attention";
 import {
   groupInboxThreads,
   isUnread,
@@ -35,7 +34,6 @@ function useClearUnreadOnOpen(): void {
         if (disposed) return;
         queryClient.setQueryData<number>(unreadCountKey(), 0);
         void queryClient.invalidateQueries({ queryKey: liveThreadsKey() });
-        void queryClient.invalidateQueries({ queryKey: inboxThreadsKey() });
       })
       .catch(() => {
         queryClient.invalidateQueries({ queryKey: unreadCountKey() });

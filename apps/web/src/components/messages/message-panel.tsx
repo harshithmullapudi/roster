@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useChannelSeen } from "~/hooks/use-channel-attention";
 import { useChannelRealtime } from "~/hooks/use-channel-realtime";
 import { useCollapseCompleted } from "~/hooks/use-collapse-completed";
 import type { MessageItem } from "~/types";
@@ -81,6 +82,7 @@ export function MessagePanel({
   });
 
   useChannelRealtime(projectId);
+  useChannelSeen(projectId);
 
   const threadsByRootMessage = useMemo(
     () => new Map(threads.map((thread) => [thread.rootMessageId, thread])),

@@ -1,32 +1,55 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
 
 import {
-  channelsNeedingAttention,
-  inboxThreadsKey,
+  channelAttentionKey,
+  dropChannelAttention,
 } from "~/utils/channel-attention";
-import { liveThreadsKey } from "~/utils/live-threads";
 import { trpc } from "~/utils/trpc";
 
 const REFRESH_MS = 30_000;
 
 export function useChannelAttention(): Set<string> {
-  const { data: live } = useQuery({
-    queryKey: liveThreadsKey(),
-    queryFn: () => trpc.threads.live.query(),
+  const { data } = useQuery({
+    queryKey: channelAttentionKey(),
+    queryFn: () => trpc.channels.attention.query(),
     refetchInterval: REFRESH_MS,
   });
 
-  const { data: inbox } = useQuery({
-    queryKey: inboxThreadsKey(),
-    queryFn: () => trpc.threads.inbox.query(),
-    refetchInterval: REFRESH_MS,
-  });
+  return useMemo(() => new Set(data ?? []), [data]);
+}
 
-  return useMemo(
-    () => channelsNeedingAttention(live ?? [], inbox ?? []),
-    [live, inbox],
-  );
+/*
+ * While a channel is open, the member is reading it: mark it seen on entry
+ * and keep the mark fresh so messages arriving mid-visit don't leave the
+ * channel bold after they walk away.
+ */
+export function useChannelSeen(projectId: string): void {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    let disposed = false;
+
+    async function markSeen() {
+      try {
+        await trpc.channels.markSeen.mutate({ projectId });
+        if (disposed) return;
+        queryClient.setQueryData<string[]>(channelAttentionKey(), (previous) =>
+          dropChannelAttention(previous, projectId),
+        );
+      } catch {
+        console.warn("[channels] mark seen failed");
+      }
+    }
+
+    void markSeen();
+    const timer = setInterval(() => void markSeen(), REFRESH_MS);
+
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+    };
+  }, [projectId, queryClient]);
 }
