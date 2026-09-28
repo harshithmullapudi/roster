@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@10.13.1",
   "scripts": {
-    "dev": "turbo dev",
+    "dev": "pnpm --filter @roster/db migrate && turbo dev",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
