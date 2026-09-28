@@ -2,7 +2,7 @@
 
 import type { ChannelGroups, Task, TaskStatus } from "@roster/api";
 import { AvatarText, Button, cn } from "@roster/ui";
-import { CircleCheck, Hash, Inbox, Repeat } from "lucide-react";
+import { CircleCheck, Folder, Inbox, Repeat } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -193,7 +193,7 @@ export function TaskList({ tasks, channels, orgSlug }: TaskListProps) {
                     TASK_STATUS_META[row.status].label
                   ) : (
                     <>
-                      {row.backlog ? <Inbox size={12} /> : <Hash size={12} />}
+                      {row.backlog ? <Inbox size={12} /> : <Folder size={12} />}
                       {row.label}
                     </>
                   )}
@@ -241,7 +241,7 @@ export function TaskList({ tasks, channels, orgSlug }: TaskListProps) {
                       }
                       className="text-muted-foreground hover:text-foreground hidden shrink-0 items-center gap-0.5 text-xs sm:flex"
                     >
-                      <Hash size={11} />
+                      <Folder size={11} />
                       {row.task.channelSlug}
                     </Link>
                   )

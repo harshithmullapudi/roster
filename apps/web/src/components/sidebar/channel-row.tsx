@@ -12,7 +12,7 @@ import {
 import { MoreHorizontal, Star } from "lucide-react";
 import Link from "next/link";
 
-import { HashMark } from "~/components/logo/hash-mark";
+import { ChannelMark } from "~/components/logo/channel-mark";
 
 import {
   ChannelMenu,
@@ -62,12 +62,7 @@ export function ChannelRow({
             asChild
           >
             <Link href={href}>
-              <HashMark
-                className={cn(
-                  "text-muted-foreground",
-                  attention && "text-foreground",
-                )}
-              />
+              <ChannelMark className="text-muted-foreground" />
               <span
                 className={cn(
                   "min-w-0 flex-1 truncate text-left",

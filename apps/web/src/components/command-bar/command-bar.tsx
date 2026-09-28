@@ -11,7 +11,7 @@ import {
   CommandSeparator,
 } from "@roster/ui";
 import { useQuery } from "@tanstack/react-query";
-import { CircleCheck, Hash, Plus, Star, Users } from "lucide-react";
+import { CircleCheck, Folder, Plus, Star, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -86,7 +86,7 @@ export function CommandBar({
                   value={`session ${session.title} ${session.channelSlug} ${session.status}`}
                   onSelect={() => go(session.href)}
                 >
-                  <Hash size={14} className="text-muted-foreground" />
+                  <Folder size={14} className="text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate">
                     {session.title}
                   </span>
@@ -114,7 +114,7 @@ export function CommandBar({
                 value={`channel ${channel.slug} ${channel.name}`}
                 onSelect={() => go(`/${orgSlug}/${channel.slug}`)}
               >
-                <Hash size={14} className="text-muted-foreground" />
+                <Folder size={14} className="text-muted-foreground" />
                 <span className="flex-1 truncate">{channel.slug}</span>
                 {starred.has(channel.id) && (
                   <Star size={13} className="text-muted-foreground shrink-0" />

@@ -17,7 +17,7 @@ import {
   PopoverPortal,
   PopoverTrigger,
 } from "@roster/ui";
-import { Check, Hash, Inbox, ListFilter, X } from "lucide-react";
+import { Check, Folder, Inbox, ListFilter, X } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -51,7 +51,7 @@ function ChannelIcon({ channelKey }: { channelKey: string }) {
   return channelKey === UNASSIGNED ? (
     <Inbox size={13} className="text-muted-foreground" />
   ) : (
-    <Hash size={13} className="text-muted-foreground" />
+    <Folder size={13} className="text-muted-foreground" />
   );
 }
 
@@ -180,7 +180,7 @@ export function TaskToolbar({
           variant="secondary"
           className="h-(--btn-h-default) items-center gap-1.5 rounded-md px-2.5 font-normal"
         >
-          {key === UNASSIGNED ? <Inbox size={12} /> : <Hash size={12} />}
+          {key === UNASSIGNED ? <Inbox size={12} /> : <Folder size={12} />}
           {channelLabel(key)}
           <button
             type="button"

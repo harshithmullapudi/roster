@@ -14,7 +14,7 @@ import {
   PopoverPortal,
   PopoverTrigger,
 } from "@roster/ui";
-import { Check, Hash, Inbox } from "lucide-react";
+import { Check, Folder, Inbox } from "lucide-react";
 import { useMemo, useState } from "react";
 
 export function flattenChannels(groups: ChannelGroups): Channel[] {
@@ -50,7 +50,7 @@ export function ChannelPicker({
           disabled={disabled}
           className="max-w-48 gap-1.5 rounded-full px-2.5 text-xs font-normal"
         >
-          <Hash size={13} className="text-muted-foreground shrink-0" />
+          <Folder size={13} className="text-muted-foreground shrink-0" />
           <span className="truncate">{selected?.slug ?? "Backlog"}</span>
         </Button>
       </PopoverTrigger>
@@ -85,7 +85,7 @@ export function ChannelPicker({
                       setOpen(false);
                     }}
                   >
-                    <Hash size={14} className="text-muted-foreground" />
+                    <Folder size={14} className="text-muted-foreground" />
                     <span className="flex-1 truncate">{channel.slug}</span>
                     {channel.id === value && (
                       <Check size={14} className="ml-auto" />
