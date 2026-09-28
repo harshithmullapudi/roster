@@ -25,7 +25,7 @@ export default async function OrgLayout({
   if (resolveStep(state) !== "done") redirect("/onboarding");
 
   return (
-    <DockProvider>
+    <DockProvider orgSlug={organization.slug}>
       <div className="bg-background flex h-dvh flex-col">
         <div className="min-h-0 flex-1">{children}</div>
         <TerminalDock />

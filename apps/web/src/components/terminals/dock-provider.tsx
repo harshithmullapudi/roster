@@ -6,14 +6,14 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
 export type DockMode = "closed" | "open";
 
-export interface DockChannel {
-  orgSlug: string;
+export interface DockFolder {
   channelSlug: string;
   projectId: string;
 }
@@ -24,8 +24,13 @@ interface DockSelection {
 }
 
 interface DockValue {
-  channel: DockChannel | null;
-  setChannel: (channel: DockChannel | null) => void;
+  orgSlug: string;
+
+  channel: DockFolder | null;
+  setChannel: (channel: DockFolder | null) => void;
+
+  folder: DockFolder | null;
+  pickFolder: (folder: DockFolder) => void;
 
   mode: DockMode;
   setMode: (mode: DockMode) => void;
@@ -44,8 +49,15 @@ const HEIGHT_KEY = "roster:dock-height";
 const MIN_HEIGHT = 160;
 const DEFAULT_HEIGHT = 320;
 
-export function DockProvider({ children }: { children: ReactNode }) {
-  const [channel, setChannel] = useState<DockChannel | null>(null);
+export function DockProvider({
+  orgSlug,
+  children,
+}: {
+  orgSlug: string;
+  children: ReactNode;
+}) {
+  const [channel, setChannelState] = useState<DockFolder | null>(null);
+  const [picked, setPicked] = useState<DockFolder | null>(null);
   const [mode, setMode] = useState<DockMode>("closed");
   const [height, setHeightState] = useState(DEFAULT_HEIGHT);
   const [selections, setSelections] = useState<Record<string, DockSelection>>({});
@@ -62,35 +74,63 @@ export function DockProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(HEIGHT_KEY, String(clamped));
   }, []);
 
+  /*
+   * The page's channel presets the folder; leaving the page hands the folder
+   * off to a manual pick so the dock keeps its context on Threads and Tasks.
+   */
+  const channelRef = useRef<DockFolder | null>(null);
+  const setChannel = useCallback((next: DockFolder | null) => {
+    setPicked(next ? null : channelRef.current);
+    channelRef.current = next;
+    setChannelState(next);
+  }, []);
+
+  const folder = channel && !picked ? channel : picked;
+
+  const pickFolder = useCallback((next: DockFolder) => {
+    setPicked(next);
+  }, []);
+
   const select = useCallback(
     (selection: DockSelection) => {
-      if (!channel) return;
-      setSelections((current) => ({ ...current, [channel.projectId]: selection }));
+      if (!folder) return;
+      setSelections((current) => ({ ...current, [folder.projectId]: selection }));
     },
-    [channel],
+    [folder],
   );
 
   const toggle = useCallback(() => {
     setMode((current) => (current === "closed" ? "open" : "closed"));
   }, []);
 
-  useEffect(() => {
-    if (!channel) setMode("closed");
-  }, [channel]);
-
   const value = useMemo<DockValue>(
     () => ({
+      orgSlug,
       channel,
       setChannel,
+      folder,
+      pickFolder,
       mode,
       setMode,
       toggle,
-      selection: channel ? (selections[channel.projectId] ?? null) : null,
+      selection: folder ? (selections[folder.projectId] ?? null) : null,
       select,
       height,
       setHeight,
     }),
-    [channel, mode, toggle, selections, select, height, setHeight],
+    [
+      orgSlug,
+      channel,
+      setChannel,
+      folder,
+      pickFolder,
+      mode,
+      toggle,
+      selections,
+      select,
+      height,
+      setHeight,
+    ],
   );
 
   return <DockContext.Provider value={value}>{children}</DockContext.Provider>;
@@ -102,14 +142,14 @@ export function useDock(): DockValue {
   return value;
 }
 
-export function DockChannelBinding(props: DockChannel) {
+export function DockChannelBinding(props: DockFolder) {
   const { setChannel } = useDock();
-  const { orgSlug, channelSlug, projectId } = props;
+  const { channelSlug, projectId } = props;
 
   useEffect(() => {
-    setChannel({ orgSlug, channelSlug, projectId });
+    setChannel({ channelSlug, projectId });
     return () => setChannel(null);
-  }, [setChannel, orgSlug, channelSlug, projectId]);
+  }, [setChannel, channelSlug, projectId]);
 
   return null;
 }

@@ -93,11 +93,7 @@ export default async function ChannelPage({
 
   return (
     <>
-    <DockChannelBinding
-      orgSlug={organization.slug}
-      channelSlug={channel.slug}
-      projectId={channel.id}
-    />
+    <DockChannelBinding channelSlug={channel.slug} projectId={channel.id} />
     <AppShell
       shell={shell}
       section="channels"
