@@ -85,6 +85,31 @@ export const channelStars = rosterSchema.table(
 
 export type SelectChannelStar = typeof channelStars.$inferSelect;
 
+export const channelReads = rosterSchema.table(
+  "channel_reads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => members.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("channel_reads_member_project_idx").on(
+      table.memberId,
+      table.projectId,
+    ),
+    index("channel_reads_member_idx").on(table.memberId),
+  ],
+);
+
+export type SelectChannelRead = typeof channelReads.$inferSelect;
+
 export const messages = rosterSchema.table(
   "messages",
   {

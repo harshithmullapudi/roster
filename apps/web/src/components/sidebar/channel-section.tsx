@@ -58,7 +58,9 @@ export function ChannelSection({
               channel={channel}
               href={`/${orgSlug}/${channel.slug}`}
               active={channel.slug === activeChannelSlug}
-              attention={attention.has(channel.id)}
+              attention={
+                attention.has(channel.id) && channel.slug !== activeChannelSlug
+              }
               canManage={canManage}
               onToggleStar={onToggleStar}
               onChangeVisibility={onChangeVisibility}

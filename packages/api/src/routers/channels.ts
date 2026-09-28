@@ -4,6 +4,10 @@ import { z } from "zod";
 import { CHANNEL_VISIBILITIES } from "../lib/channel-visibility";
 import { listAgents } from "../services/agents";
 import {
+  listUnseenChannels,
+  markChannelSeen,
+} from "../services/channel-reads";
+import {
   dismissChannelPause,
   getChannelBySlug,
   listChannels,
@@ -28,6 +32,32 @@ export const channelsRouter = createTRPCRouter({
       role: ctx.member.role,
     }),
   ),
+
+  attention: memberProcedure.query(({ ctx }) =>
+    listUnseenChannels({
+      organizationId: ctx.organizationId,
+      memberId: ctx.member.id,
+      role: ctx.member.role,
+    }),
+  ),
+
+  markSeen: memberProcedure
+    .input(z.object({ projectId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const project = await requireOrgProject({
+        organizationId: ctx.organizationId,
+        memberId: ctx.member.id,
+        role: ctx.member.role,
+        projectId: input.projectId,
+      });
+      if (!project) throw new TRPCError({ code: "NOT_FOUND" });
+
+      await markChannelSeen({
+        memberId: ctx.member.id,
+        projectId: project.id,
+      });
+      return { projectId: project.id };
+    }),
 
   mentionable: memberProcedure.query(async ({ ctx }) => {
     const scope = {
