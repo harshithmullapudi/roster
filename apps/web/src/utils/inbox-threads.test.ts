@@ -2,9 +2,11 @@ import type { InboxThread } from "@roster/api";
 import { describe, expect, it } from "vitest";
 
 import {
+  filterInboxThreads,
   groupInboxThreads,
   inboxBucket,
   isUnread,
+  parseInboxFilter,
   subscriptionLabel,
 } from "./inbox-threads";
 
@@ -112,6 +114,62 @@ describe("isUnread", () => {
     expect(isUnread({ unread: true, muted: true })).toBe(false);
     expect(isUnread({ unread: false, muted: false })).toBe(false);
     expect(isUnread({ unread: false, muted: true })).toBe(false);
+  });
+});
+
+describe("parseInboxFilter", () => {
+  it("defaults to unread", () => {
+    expect(parseInboxFilter(null)).toBe("unread");
+    expect(parseInboxFilter("")).toBe("unread");
+    expect(parseInboxFilter("nonsense")).toBe("unread");
+  });
+
+  it("recognizes all", () => {
+    expect(parseInboxFilter("all")).toBe("all");
+  });
+
+  it("recognizes needs-input", () => {
+    expect(parseInboxFilter("needs-input")).toBe("needs-input");
+  });
+});
+
+describe("filterInboxThreads", () => {
+  const rows = [
+    thread({ id: "unread", unread: true }),
+    thread({ id: "read", unread: false }),
+    thread({ id: "muted", unread: true, muted: true }),
+  ];
+
+  it("keeps only unread, unmuted threads for the unread filter", () => {
+    expect(filterInboxThreads(rows, "unread").map((row) => row.id)).toEqual([
+      "unread",
+    ]);
+  });
+
+  it("keeps everything for the all filter", () => {
+    expect(filterInboxThreads(rows, "all").map((row) => row.id)).toEqual([
+      "unread",
+      "read",
+      "muted",
+    ]);
+  });
+
+  it("keeps only threads waiting on input for the needs-input filter", () => {
+    const mixed = [
+      thread({ id: "waiting", status: "needs_input" }),
+      thread({ id: "done", status: "completed" }),
+      thread({ id: "waiting-read", status: "needs_input", unread: false }),
+    ];
+    expect(
+      filterInboxThreads(mixed, "needs-input").map((row) => row.id),
+    ).toEqual(["waiting", "waiting-read"]);
+  });
+
+  it("keeps threads that were unread when the page opened", () => {
+    const pinned = new Set(["read"]);
+    expect(
+      filterInboxThreads(rows, "unread", pinned).map((row) => row.id),
+    ).toEqual(["unread", "read"]);
   });
 });
 

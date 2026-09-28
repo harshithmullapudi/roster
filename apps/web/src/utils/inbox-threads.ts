@@ -44,6 +44,26 @@ export function isUnread(
   return thread.unread && !thread.muted;
 }
 
+export type InboxFilter = "unread" | "needs-input" | "all";
+
+export function parseInboxFilter(value: string | null): InboxFilter {
+  if (value === "all") return "all";
+  if (value === "needs-input") return "needs-input";
+  return "unread";
+}
+
+export function filterInboxThreads(
+  threads: InboxThread[],
+  filter: InboxFilter,
+  pinned: ReadonlySet<string> = new Set(),
+): InboxThread[] {
+  if (filter === "all") return threads;
+  if (filter === "needs-input") {
+    return threads.filter((thread) => thread.status === "needs_input");
+  }
+  return threads.filter((thread) => isUnread(thread) || pinned.has(thread.id));
+}
+
 export function groupInboxThreads(
   threads: InboxThread[],
   now: Date = new Date(),

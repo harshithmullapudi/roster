@@ -27,6 +27,7 @@ import {
   prependReplies,
   splitThread,
 } from "~/utils/thread-detail";
+import { questionGroups } from "~/utils/question-options";
 import {
   markThreadSeen,
   needsInput,
@@ -36,6 +37,7 @@ import {
 } from "~/utils/thread-rows";
 import { trpc } from "~/utils/trpc";
 
+import { AnswerOptions } from "./answer-options";
 import { ReplyDivider } from "./reply-divider";
 import { ThreadLiveBar } from "./thread-live-bar";
 
@@ -104,6 +106,18 @@ export function ThreadPanel({
   const asking = needsInput(detail.thread.status);
   const { root, replies } = splitThread(detail);
 
+  // Codex-style agents have no needs_input hook — their questions are just
+  // the turn's last words and the session rests at idle, where a reply
+  // resumes it. So choices are offered whenever the agent spoke last and
+  // the session is waiting on a person, whichever way it says so.
+  const resting = asking || status === "idle";
+  const newest = replies.length > 0 ? replies[replies.length - 1] : root;
+  const question = resting && newest?.kind === "agent" ? newest : undefined;
+  const groups = useMemo(
+    () => (question?.text ? questionGroups(question.text) : []),
+    [question?.text],
+  );
+
   const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const loadingRef = useRef(false);
@@ -157,7 +171,7 @@ export function ThreadPanel({
   const reachTop = useCallback(() => void loadOlder(), [loadOlder]);
   const tail = useTailFollow({ onReachTop: reachTop });
 
-  async function send(payload: ComposerSendPayload) {
+  async function send(payload: ComposerSendPayload): Promise<boolean> {
     tail.stick();
 
     const clientId = crypto.randomUUID();
@@ -191,10 +205,12 @@ export function ThreadPanel({
       queryClient.setQueryData<ThreadDetail>(queryKey, (previous) =>
         previous ? mergeReply(previous, saved as MessageItem) : previous,
       );
+      return true;
     } catch {
       queryClient.setQueryData<ThreadDetail>(queryKey, (previous) =>
         previous ? failReply(previous, clientId) : previous,
       );
+      return false;
     }
   }
 
@@ -278,6 +294,22 @@ export function ThreadPanel({
         thread={detail.thread}
       />
 
+      {groups.length > 0 ? (
+        <AnswerOptions
+          key={question?.id}
+          groups={groups}
+          asking={asking}
+          onAnswer={(text) =>
+            send({
+              body: answerBody(text),
+              text,
+              attachmentIds: [],
+              attachments: [],
+            })
+          }
+        />
+      ) : null}
+
       <div className="pb-safe-2 shrink-0 px-2 pt-2 sm:px-3 sm:pb-3">
         <Composer
           placeholder={asking ? "Answer…" : "Reply…"}
@@ -288,6 +320,23 @@ export function ThreadPanel({
       </div>
     </div>
   );
+}
+
+function answerBody(text: string): unknown {
+  const paragraph = (value: string) => ({
+    type: "paragraph",
+    content: [{ type: "text", text: value }],
+  });
+
+  const content = text.split("\n").flatMap((line): unknown[] => {
+    if (line.trim().length === 0) return [];
+    if (line.startsWith("> ")) {
+      return [{ type: "blockquote", content: [paragraph(line.slice(2))] }];
+    }
+    return [paragraph(line)];
+  });
+
+  return { type: "doc", content };
 }
 
 const INITIAL_PAGE = 50;

@@ -67,7 +67,14 @@ export function ThreadLiveBar({
         <span className="text-destructive text-sm">{thread.error}</span>
       ) : thread.waitingOn ? (
         <WaitingOnCard waiting={thread.waitingOn} />
-      ) : !asking && thread.lastProgress ? (
+      ) : asking ? (
+        <span className="text-sm">
+          <span className="font-medium">The agent is waiting on you.</span>{" "}
+          <span className="text-muted-foreground">
+            Reply below — your answer goes straight into its session.
+          </span>
+        </span>
+      ) : thread.lastProgress ? (
         <span className="text-muted-foreground text-sm">
           {thread.lastProgress}
         </span>

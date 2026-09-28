@@ -1,16 +1,20 @@
 "use client";
 
 import type { InboxThread } from "@roster/api";
-import { cn } from "@roster/ui";
+import { Button, cn } from "@roster/ui";
 import { AtSign, BellOff, Folder, MessagesSquare } from "lucide-react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  filterInboxThreads,
   groupInboxThreads,
   isUnread,
+  parseInboxFilter,
   subscriptionLabel,
+  type InboxFilter,
 } from "~/utils/inbox-threads";
 import { liveThreadsKey, threadTitle } from "~/utils/live-threads";
 import { relativeTime } from "~/utils/relative-time";
@@ -153,28 +157,129 @@ function EmptyInbox() {
   );
 }
 
+function CaughtUp({
+  filter,
+  onShowAll,
+}: {
+  filter: InboxFilter;
+  onShowAll: () => void;
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+      <MessagesSquare className="text-muted-foreground size-7" />
+      <p className="text-sm font-medium">
+        {filter === "needs-input"
+          ? "Nothing needs your input"
+          : "You're all caught up"}
+      </p>
+      <p className="text-muted-foreground max-w-xs text-sm">
+        {filter === "needs-input"
+          ? "Threads show up here when an agent is waiting on an answer from you."
+          : "Nothing unread right now. New activity in your threads lands here."}
+      </p>
+      <button
+        type="button"
+        onClick={onShowAll}
+        className="text-primary text-sm hover:underline"
+      >
+        Show all threads
+      </button>
+    </div>
+  );
+}
+
+const FILTERS: { value: InboxFilter; label: string }[] = [
+  { value: "unread", label: "Unread" },
+  { value: "needs-input", label: "Needs input" },
+  { value: "all", label: "All" },
+];
+
+function FilterBar({
+  filter,
+  onChange,
+}: {
+  filter: InboxFilter;
+  onChange: (filter: InboxFilter) => void;
+}) {
+  return (
+    <div className="border-border flex shrink-0 items-center gap-0.5 border-b px-2 py-1.5 sm:px-3">
+      {FILTERS.map(({ value, label }) => (
+        <Button
+          key={value}
+          variant="ghost"
+          isActive={filter === value}
+          onClick={() => onChange(value)}
+          aria-pressed={filter === value}
+          className={cn(
+            "text-muted-foreground shrink-0 !rounded-md px-2 text-sm",
+            filter === value && "!bg-accent !text-accent-foreground",
+          )}
+        >
+          {label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 export function ThreadInbox({ threads, orgSlug }: ThreadInboxProps) {
-  const groups = useMemo(() => groupInboxThreads(threads), [threads]);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const filter = parseInboxFilter(searchParams.get("filter"));
+
+  const setFilter = useCallback(
+    (next: InboxFilter) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === "unread") params.delete("filter");
+      else params.set("filter", next);
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, {
+        scroll: false,
+      });
+    },
+    [router, pathname, searchParams],
+  );
+
+  const [pinnedUnread] = useState(
+    () => new Set(threads.filter(isUnread).map((thread) => thread.id)),
+  );
+
+  const groups = useMemo(
+    () => groupInboxThreads(filterInboxThreads(threads, filter, pinnedUnread)),
+    [threads, filter, pinnedUnread],
+  );
   useClearUnreadOnOpen();
 
-  if (groups.length === 0) return <EmptyInbox />;
+  if (threads.length === 0) return <EmptyInbox />;
 
   return (
-    <div className="overscroll-contain min-h-0 flex-1 overflow-y-auto">
-      <div className="pb-safe-2 flex w-full flex-col gap-4 p-1 sm:p-2">
-        {groups.map((group) => (
-          <section key={group.bucket} className="flex flex-col gap-0.5">
-            <h2 className="text-muted-foreground px-2 pt-2 pb-1 text-xs font-medium sm:px-3">
-              {group.label}
-            </h2>
-            <ul className="flex flex-col gap-0.5">
-              {group.threads.map((thread) => (
-                <ThreadRow key={thread.id} thread={thread} orgSlug={orgSlug} />
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <FilterBar filter={filter} onChange={setFilter} />
+      {groups.length === 0 ? (
+        <CaughtUp filter={filter} onShowAll={() => setFilter("all")} />
+      ) : (
+        <div className="overscroll-contain min-h-0 flex-1 overflow-y-auto">
+          <div className="pb-safe-2 flex w-full flex-col gap-4 p-1 sm:p-2">
+            {groups.map((group) => (
+              <section key={group.bucket} className="flex flex-col gap-0.5">
+                <h2 className="text-muted-foreground px-2 pt-2 pb-1 text-xs font-medium sm:px-3">
+                  {group.label}
+                </h2>
+                <ul className="flex flex-col gap-0.5">
+                  {group.threads.map((thread) => (
+                    <ThreadRow
+                      key={thread.id}
+                      thread={thread}
+                      orgSlug={orgSlug}
+                    />
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
