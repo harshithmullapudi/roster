@@ -100,6 +100,28 @@ export async function createWorkspace(args: {
   return result.workspace;
 }
 
+export async function createWorkspaceEnqueued(args: {
+  jwt: string;
+  routingKey: string;
+  projectId: string;
+  workspaceId: string;
+  name: string;
+}): Promise<{ workspaceId: string }> {
+  return call<{ workspaceId: string }>({
+    jwt: args.jwt,
+    routingKey: args.routingKey,
+    procedure: "workspaces.createEnqueued",
+    input: {
+      id: args.workspaceId,
+      projectId: args.projectId,
+      name: args.name,
+      runSetup: false,
+    },
+    what: "Creating a worktree on that machine",
+    method: "POST",
+  });
+}
+
 export async function deleteWorkspace(args: {
   jwt: string;
   routingKey: string;

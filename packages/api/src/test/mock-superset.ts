@@ -13,6 +13,11 @@ vi.mock("@roster/superset", async (importOriginal) => {
       id: "workspace-1",
       path: "/tmp/workspace-1",
     })),
+    createWorkspaceEnqueued: vi.fn(
+      async (args: { workspaceId: string }) => ({
+        workspaceId: args.workspaceId,
+      }),
+    ),
     deleteWorkspace: vi.fn(async () => undefined),
     clearWorkspaceStatuses: vi.fn(async () => undefined),
     createTerminal: vi.fn(async () => ({ id: "terminal-1" })),

@@ -55,6 +55,7 @@ export function AppSidebar({
           orgSlug={organization.slug}
           activeChannelSlug={activeChannelSlug}
           canManage={shell.can("channel:update")}
+          canCreate={shell.can("channel:create")}
         />
       </nav>
     </aside>

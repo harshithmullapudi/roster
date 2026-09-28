@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { CHANNEL_VISIBILITIES } from "../lib/channel-visibility";
 import { listAgents } from "../services/agents";
+import { createChannel } from "../services/channel-create";
 import {
   dismissChannelPause,
   getChannelBySlug,
@@ -21,6 +22,33 @@ import {
 } from "../trpc";
 
 export const channelsRouter = createTRPCRouter({
+  create: capabilityProcedure("channel:create")
+    .input(
+      z.object({
+        name: z
+          .string()
+          .trim()
+          .min(1, "Give the channel a name.")
+          .max(60, "Keep it under 60 characters."),
+        sourceChannelId: z.string().uuid(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const channel = await createChannel({
+        organizationId: ctx.organizationId,
+        memberId: ctx.member.id,
+        role: ctx.member.role,
+        name: input.name,
+        sourceChannelId: input.sourceChannelId,
+      });
+      return {
+        id: channel.id,
+        slug: channel.slug,
+        name: channel.name,
+        visibility: channel.visibility,
+      };
+    }),
+
   list: memberProcedure.query(({ ctx }) =>
     listChannels({
       organizationId: ctx.organizationId,

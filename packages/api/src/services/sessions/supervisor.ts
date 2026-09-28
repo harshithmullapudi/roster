@@ -1141,15 +1141,24 @@ async function startSessionRow(args: {
   try {
     const connection = await hostConnection(session);
 
-    const workspace = args.shareWorkspace
-      ? { id: args.shareWorkspace.workspaceId }
+    const shared =
+      args.shareWorkspace ??
+      (connection.project.supersetWorkspaceId
+        ? {
+            workspaceId: connection.project.supersetWorkspaceId,
+            hostKey: connection.hostKey,
+          }
+        : undefined);
+
+    const workspace = shared
+      ? { id: shared.workspaceId }
       : await createWorkspace({
           jwt: connection.jwt,
           routingKey: connection.hostKey,
           projectId: connection.project.supersetProjectId,
           namingPrompt: args.text,
         });
-    const hostKey = args.shareWorkspace?.hostKey ?? connection.hostKey;
+    const hostKey = shared?.hostKey ?? connection.hostKey;
 
     await patch(session.id, {
       supersetWorkspaceId: workspace.id,
@@ -1652,11 +1661,13 @@ export async function reapThread(args: { threadId: string }): Promise<void> {
     if (!reaped.has(workspaceId)) {
       try {
         const connection = await hostConnection(session);
-        await deleteWorkspace({
-          jwt: connection.jwt,
-          routingKey: session.supersetHostKey ?? connection.hostKey,
-          workspaceId,
-        });
+        if (connection.project.supersetWorkspaceId !== workspaceId) {
+          await deleteWorkspace({
+            jwt: connection.jwt,
+            routingKey: session.supersetHostKey ?? connection.hostKey,
+            workspaceId,
+          });
+        }
       } catch (cause) {
         console.warn(
           `[sessions] reap failed for ${session.id}: ${sessionErrorDetail(cause)}`,

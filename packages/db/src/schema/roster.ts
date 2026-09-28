@@ -27,6 +27,7 @@ export const projects = rosterSchema.table(
     supersetProjectId: text("superset_project_id").notNull(),
     supersetHostId: text("superset_host_id").notNull(),
     supersetOrgId: uuid("superset_org_id").notNull(),
+    supersetWorkspaceId: text("superset_workspace_id"),
 
     name: text("name").notNull(),
     slug: text("slug").notNull(),
@@ -51,7 +52,7 @@ export const projects = rosterSchema.table(
   },
   (table) => [
     index("projects_organization_id_idx").on(table.organizationId),
-    uniqueIndex("projects_org_superset_id_idx").on(
+    index("projects_org_superset_id_idx").on(
       table.organizationId,
       table.supersetProjectId,
     ),

@@ -8,12 +8,14 @@ import { readCollapsed, writeCollapsed } from "~/utils/sidebar-collapse";
 import { trpc } from "~/utils/trpc";
 
 import { ChannelSection } from "./channel-section";
+import { CreateChannelDialog } from "./create-channel-dialog";
 
 export interface ChannelSectionsProps {
   groups: ChannelGroups;
   orgSlug: string;
   activeChannelSlug?: string;
   canManage: boolean;
+  canCreate: boolean;
 }
 
 const SECTIONS: { key: keyof ChannelGroups; label: string }[] = [
@@ -44,10 +46,12 @@ export function ChannelSections({
   orgSlug,
   activeChannelSlug,
   canManage,
+  canCreate,
 }: ChannelSectionsProps) {
   const router = useRouter();
   const [current, setCurrent] = useState(groups);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => setCurrent(groups), [groups]);
   useEffect(() => setCollapsed(readCollapsed()), []);
@@ -107,8 +111,19 @@ export function ChannelSections({
           onOpenChange={(open) => setOpen(section.key, open)}
           onToggleStar={toggleStar}
           onChangeVisibility={changeVisibility}
+          onCreate={
+            section.key === "private" && canCreate
+              ? () => setCreating(true)
+              : undefined
+          }
         />
       ))}
+      <CreateChannelDialog
+        open={creating}
+        onOpenChange={setCreating}
+        channels={[...current.starred, ...current.public, ...current.private]}
+        orgSlug={orgSlug}
+      />
     </div>
   );
 }

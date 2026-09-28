@@ -2,6 +2,7 @@ export const ORG_ROLES = ["owner", "admin", "member"] as const;
 export type OrgRole = (typeof ORG_ROLES)[number];
 
 export const CAPABILITIES = [
+  "channel:create",
   "channel:update",
   "member:invite",
   "member:remove",

@@ -11,6 +11,7 @@ export {
   clearWorkspaceStatuses,
   createTerminal,
   createWorkspace,
+  createWorkspaceEnqueued,
   DEFAULT_AGENT,
   deleteWorkspace,
   eventsUrl,
