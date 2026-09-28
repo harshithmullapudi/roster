@@ -27,7 +27,7 @@ import {
   prependReplies,
   splitThread,
 } from "~/utils/thread-detail";
-import { questionOptions } from "~/utils/question-options";
+import { questionGroups } from "~/utils/question-options";
 import {
   markThreadSeen,
   needsInput,
@@ -106,11 +106,15 @@ export function ThreadPanel({
   const asking = needsInput(detail.thread.status);
   const { root, replies } = splitThread(detail);
 
-  const question = asking
-    ? [...replies].reverse().find((message) => message.kind === "agent")
-    : undefined;
-  const options = useMemo(
-    () => (question?.text ? questionOptions(question.text) : []),
+  // Codex-style agents have no needs_input hook — their questions are just
+  // the turn's last words and the session rests at idle, where a reply
+  // resumes it. So choices are offered whenever the agent spoke last and
+  // the session is waiting on a person, whichever way it says so.
+  const resting = asking || status === "idle";
+  const newest = replies.length > 0 ? replies[replies.length - 1] : root;
+  const question = resting && newest?.kind === "agent" ? newest : undefined;
+  const groups = useMemo(
+    () => (question?.text ? questionGroups(question.text) : []),
     [question?.text],
   );
 
@@ -290,14 +294,15 @@ export function ThreadPanel({
         thread={detail.thread}
       />
 
-      {asking && options.length > 0 ? (
+      {groups.length > 0 ? (
         <AnswerOptions
           key={question?.id}
-          options={options}
-          onAnswer={(option) =>
+          groups={groups}
+          asking={asking}
+          onAnswer={(text) =>
             send({
-              body: answerBody(option),
-              text: option,
+              body: answerBody(text),
+              text,
               attachmentIds: [],
               attachments: [],
             })
@@ -318,10 +323,20 @@ export function ThreadPanel({
 }
 
 function answerBody(text: string): unknown {
-  return {
-    type: "doc",
-    content: [{ type: "paragraph", content: [{ type: "text", text }] }],
-  };
+  const paragraph = (value: string) => ({
+    type: "paragraph",
+    content: [{ type: "text", text: value }],
+  });
+
+  const content = text.split("\n").flatMap((line): unknown[] => {
+    if (line.trim().length === 0) return [];
+    if (line.startsWith("> ")) {
+      return [{ type: "blockquote", content: [paragraph(line.slice(2))] }];
+    }
+    return [paragraph(line)];
+  });
+
+  return { type: "doc", content };
 }
 
 const INITIAL_PAGE = 50;
