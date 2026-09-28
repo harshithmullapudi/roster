@@ -1,5 +1,16 @@
 import { db, members, projects, tasks, users } from "@roster/db";
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+} from "drizzle-orm";
 
 import { normalizeTaskStatus, type TaskStatus } from "../lib/task-status";
 
@@ -128,6 +139,38 @@ export async function listTasks(
   const rows = await selectTasks()
     .where(and(eq(tasks.organizationId, scope.organizationId), reachable))
     .orderBy(desc(tasks.createdAt));
+
+  return rows.map(toTask);
+}
+
+export const UPCOMING_WINDOW_MINUTES = 30;
+
+export async function upcomingTasks(
+  scope: ChannelScope & { projectId: string; withinMinutes?: number },
+): Promise<Task[]> {
+  const project = await requireOrgProject({
+    organizationId: scope.organizationId,
+    memberId: scope.memberId,
+    role: scope.role,
+    projectId: scope.projectId,
+  });
+  if (!project) return [];
+
+  const now = new Date();
+  const until = new Date(
+    now.getTime() + (scope.withinMinutes ?? UPCOMING_WINDOW_MINUTES) * 60_000,
+  );
+
+  const rows = await selectTasks()
+    .where(
+      and(
+        eq(tasks.projectId, project.id),
+        isNotNull(tasks.rrule),
+        gte(tasks.nextRunAt, now),
+        lte(tasks.nextRunAt, until),
+      ),
+    )
+    .orderBy(asc(tasks.nextRunAt));
 
   return rows.map(toTask);
 }

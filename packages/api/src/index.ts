@@ -78,7 +78,12 @@ export {
   type ThreadSummary,
   type WaitingOn,
 } from "./services/sessions";
-export { listTasks, type Task, type TaskCreator } from "./services/tasks";
+export {
+  listTasks,
+  upcomingTasks,
+  type Task,
+  type TaskCreator,
+} from "./services/tasks";
 export {
   LATE_GRACE_MS,
   RUN_OUTCOMES,
