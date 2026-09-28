@@ -8,7 +8,7 @@ import type { Shell } from "~/lib/shell";
 import type { SidebarSection } from "~/types";
 
 import { PageHeader } from "./page-header";
-import { RailLayout } from "./rail-layout";
+import { RailLayout, type RailLayoutOptions } from "./rail-layout";
 import { SidebarSheet } from "./sidebar-sheet";
 
 export interface AppShellProps {
@@ -20,6 +20,7 @@ export interface AppShellProps {
   tabs?: ReactNode;
   flush?: boolean;
   rail?: ReactNode;
+  railLayout?: RailLayoutOptions;
   children: ReactNode;
 }
 
@@ -32,6 +33,7 @@ export function AppShell({
   tabs,
   flush,
   rail,
+  railLayout,
   children,
 }: AppShellProps) {
   const sidebar = (
@@ -71,7 +73,7 @@ export function AppShell({
         <div className="hidden md:flex">{sidebar}</div>
 
         <main className="bg-background-2 shadow-1 flex min-w-0 flex-1 overflow-hidden md:mr-2 md:mt-2 md:rounded-xl">
-          <RailLayout main={column} rail={rail} />
+          <RailLayout main={column} rail={rail} options={railLayout} />
         </main>
 
         <MentionPopover />

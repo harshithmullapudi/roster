@@ -13,6 +13,7 @@ import {
   groupInboxThreads,
   isUnread,
   parseInboxFilter,
+  showsUnreadDot,
   subscriptionLabel,
   type InboxFilter,
 } from "~/utils/inbox-threads";
@@ -51,29 +52,28 @@ function useClearUnreadOnOpen(): void {
 
 export interface ThreadInboxProps {
   threads: InboxThread[];
-  orgSlug: string;
 }
 
 function ThreadRow({
   thread,
-  orgSlug,
+  href,
+  unread,
+  selected,
 }: {
   thread: InboxThread;
-  orgSlug: string;
+  href: string;
+  unread: boolean;
+  selected: boolean;
 }) {
-  const unread = isUnread(thread);
-
   return (
     <li
       className={cn(
         "hover:bg-accent/50 relative flex flex-col gap-1 rounded-lg px-2 py-2 transition-colors sm:px-3",
         unread && "bg-accent/30",
+        selected && "bg-accent",
       )}
     >
-      <Link
-        href={`/${orgSlug}/${thread.channelSlug}/thread/${thread.id}`}
-        className="flex min-w-0 flex-col gap-1"
-      >
+      <Link href={href} scroll={false} className="flex min-w-0 flex-col gap-1">
         <span className="flex min-w-0 items-center gap-2">
           <span
             aria-label={unread ? "Unread" : undefined}
@@ -222,11 +222,12 @@ function FilterBar({
   );
 }
 
-export function ThreadInbox({ threads, orgSlug }: ThreadInboxProps) {
+export function ThreadInbox({ threads }: ThreadInboxProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const filter = parseInboxFilter(searchParams.get("filter"));
+  const openThreadId = searchParams.get("thread");
 
   const setFilter = useCallback(
     (next: InboxFilter) => {
@@ -241,9 +242,31 @@ export function ThreadInbox({ threads, orgSlug }: ThreadInboxProps) {
     [router, pathname, searchParams],
   );
 
+  const threadHref = useCallback(
+    (threadId: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("thread", threadId);
+      return `${pathname}?${params.toString()}`;
+    },
+    [pathname, searchParams],
+  );
+
   const [pinnedUnread] = useState(
     () => new Set(threads.filter(isUnread).map((thread) => thread.id)),
   );
+
+  const [opened, setOpened] = useState<ReadonlySet<string>>(
+    () => new Set(openThreadId ? [openThreadId] : []),
+  );
+
+  useEffect(() => {
+    if (!openThreadId) return;
+    setOpened((previous) =>
+      previous.has(openThreadId)
+        ? previous
+        : new Set(previous).add(openThreadId),
+    );
+  }, [openThreadId]);
 
   const groups = useMemo(
     () => groupInboxThreads(filterInboxThreads(threads, filter, pinnedUnread)),
@@ -271,7 +294,9 @@ export function ThreadInbox({ threads, orgSlug }: ThreadInboxProps) {
                     <ThreadRow
                       key={thread.id}
                       thread={thread}
-                      orgSlug={orgSlug}
+                      href={threadHref(thread.id)}
+                      unread={showsUnreadDot(thread, pinnedUnread, opened)}
+                      selected={thread.id === openThreadId}
                     />
                   ))}
                 </ul>

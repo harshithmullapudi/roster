@@ -9,29 +9,38 @@ import type { ComponentProps, ReactNode } from "react";
 
 type PanelGroupProps = ComponentProps<typeof ResizablePanelGroup>;
 
+export interface RailSizes {
+  main: string;
+  rail: string;
+}
+
+const DEFAULT_SIZES: RailSizes = { main: "65", rail: "35" };
+
 export interface RailPanelsProps {
   main: ReactNode;
   rail: ReactNode;
-  defaultLayout?: PanelGroupProps["defaultLayout"];
+  sizes?: RailSizes;
+  groupRef?: PanelGroupProps["groupRef"];
   onLayoutChanged?: PanelGroupProps["onLayoutChanged"];
 }
 
 export function RailPanels({
   main,
   rail,
-  defaultLayout,
+  sizes = DEFAULT_SIZES,
+  groupRef,
   onLayoutChanged,
 }: RailPanelsProps) {
   return (
     <ResizablePanelGroup
       orientation="horizontal"
-      defaultLayout={defaultLayout}
+      groupRef={groupRef}
       onLayoutChanged={onLayoutChanged}
       className="rail-group min-w-0 flex-1"
     >
       <ResizablePanel
         id="shell-main"
-        defaultSize="65"
+        defaultSize={sizes.main}
         minSize="35"
         className="flex min-w-0"
       >
@@ -42,7 +51,7 @@ export function RailPanels({
           <ResizableHandle className="hover:bg-primary/40 transition-colors after:w-2" />
           <ResizablePanel
             id="shell-rail"
-            defaultSize="35"
+            defaultSize={sizes.rail}
             minSize="24"
             maxSize="60"
             className="flex min-w-0"
