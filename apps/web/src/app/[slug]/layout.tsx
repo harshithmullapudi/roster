@@ -29,7 +29,7 @@ export default async function OrgLayout({
       <div className="bg-background flex h-dvh flex-col">
         <div className="min-h-0 flex-1">{children}</div>
         <TerminalDock />
-        <DockStatusBar />
+        <DockStatusBar orgSlug={organization.slug} />
       </div>
     </DockProvider>
   );

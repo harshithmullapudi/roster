@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireOrgProject } from "../services/channels";
 import {
   closeWorktreeSession,
+  countOpenWorktrees,
   isUnknownWorktree,
   listChannelAgents,
   listWorktreeSessions,
@@ -27,7 +28,7 @@ function rethrow(cause: unknown): never {
 
 export const terminalsRouter = createTRPCRouter({
   worktrees: memberProcedure
-    .input(channelInput)
+    .input(channelInput.extend({ includeClosed: z.boolean().optional() }))
     .query(async ({ ctx, input }) => {
       const project = await requireOrgProject({
         organizationId: ctx.organizationId,
@@ -37,8 +38,16 @@ export const terminalsRouter = createTRPCRouter({
       });
       if (!project) throw new TRPCError({ code: "NOT_FOUND" });
 
-      return listWorktrees(project.id);
+      return listWorktrees(project.id, { includeClosed: input.includeClosed });
     }),
+
+  openFolders: memberProcedure.query(({ ctx }) =>
+    countOpenWorktrees({
+      organizationId: ctx.organizationId,
+      memberId: ctx.member.id,
+      role: ctx.member.role,
+    }),
+  ),
 
   sessions: memberProcedure
     .input(worktreeInput)

@@ -19,6 +19,8 @@ export interface HoverCardThread {
   status: string;
   lastProgress: string | null;
   turnUnseen: boolean;
+  href?: string;
+  channelSlug?: string;
 }
 
 export interface SessionsHoverCardProps {
@@ -52,13 +54,18 @@ export function SessionsHoverCard({
             {threads.map((thread) => (
               <Link
                 key={thread.id}
-                href={`${basePath}?thread=${thread.id}`}
+                href={thread.href ?? `${basePath}?thread=${thread.id}`}
                 className="hover:bg-accent flex flex-col gap-0.5 rounded-md px-2 py-1.5"
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-sm">
                     {threadTitle(thread.rootText)}
                   </span>
+                  {thread.channelSlug ? (
+                    <span className="text-muted-foreground shrink-0 text-xs">
+                      #{thread.channelSlug}
+                    </span>
+                  ) : null}
                   {thread.turnUnseen ? (
                     <TurnCompleted />
                   ) : (
