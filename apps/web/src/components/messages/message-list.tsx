@@ -18,6 +18,7 @@ export interface MessageListProps {
   rows: ChannelRow<MessageItem>[];
   empty: boolean;
   threadsByRootMessage: Map<string, ThreadItem>;
+  openThreadId: string | null;
   basePath: string;
   memberId: string;
   firstItemIndex: number;
@@ -37,6 +38,7 @@ export function MessageList({
   rows,
   empty,
   threadsByRootMessage,
+  openThreadId,
   basePath,
   memberId,
   firstItemIndex,
@@ -75,6 +77,7 @@ export function MessageList({
           )}
           thread={thread}
           threadHref={thread ? `${basePath}?thread=${thread.id}` : undefined}
+          threadOpen={thread !== undefined && thread.id === openThreadId}
           memberId={memberId}
           onDelete={onDelete}
         />
@@ -84,6 +87,7 @@ export function MessageList({
       firstItemIndex,
       rows,
       threadsByRootMessage,
+      openThreadId,
       basePath,
       memberId,
       onDelete,
