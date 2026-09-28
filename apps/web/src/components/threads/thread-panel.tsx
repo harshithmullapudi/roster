@@ -27,6 +27,7 @@ import {
   prependReplies,
   splitThread,
 } from "~/utils/thread-detail";
+import { questionOptions } from "~/utils/question-options";
 import {
   markThreadSeen,
   needsInput,
@@ -36,6 +37,7 @@ import {
 } from "~/utils/thread-rows";
 import { trpc } from "~/utils/trpc";
 
+import { AnswerOptions } from "./answer-options";
 import { ReplyDivider } from "./reply-divider";
 import { ThreadLiveBar } from "./thread-live-bar";
 
@@ -104,6 +106,14 @@ export function ThreadPanel({
   const asking = needsInput(detail.thread.status);
   const { root, replies } = splitThread(detail);
 
+  const question = asking
+    ? [...replies].reverse().find((message) => message.kind === "agent")
+    : undefined;
+  const options = useMemo(
+    () => (question?.text ? questionOptions(question.text) : []),
+    [question?.text],
+  );
+
   const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const loadingRef = useRef(false);
@@ -157,7 +167,7 @@ export function ThreadPanel({
   const reachTop = useCallback(() => void loadOlder(), [loadOlder]);
   const tail = useTailFollow({ onReachTop: reachTop });
 
-  async function send(payload: ComposerSendPayload) {
+  async function send(payload: ComposerSendPayload): Promise<boolean> {
     tail.stick();
 
     const clientId = crypto.randomUUID();
@@ -191,10 +201,12 @@ export function ThreadPanel({
       queryClient.setQueryData<ThreadDetail>(queryKey, (previous) =>
         previous ? mergeReply(previous, saved as MessageItem) : previous,
       );
+      return true;
     } catch {
       queryClient.setQueryData<ThreadDetail>(queryKey, (previous) =>
         previous ? failReply(previous, clientId) : previous,
       );
+      return false;
     }
   }
 
@@ -278,6 +290,21 @@ export function ThreadPanel({
         thread={detail.thread}
       />
 
+      {asking && options.length > 0 ? (
+        <AnswerOptions
+          key={question?.id}
+          options={options}
+          onAnswer={(option) =>
+            send({
+              body: answerBody(option),
+              text: option,
+              attachmentIds: [],
+              attachments: [],
+            })
+          }
+        />
+      ) : null}
+
       <div className="pb-safe-2 shrink-0 px-2 pt-2 sm:px-3 sm:pb-3">
         <Composer
           placeholder={asking ? "Answer…" : "Reply…"}
@@ -288,6 +315,13 @@ export function ThreadPanel({
       </div>
     </div>
   );
+}
+
+function answerBody(text: string): unknown {
+  return {
+    type: "doc",
+    content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+  };
 }
 
 const INITIAL_PAGE = 50;
