@@ -44,6 +44,21 @@ export function isUnread(
   return thread.unread && !thread.muted;
 }
 
+export type InboxFilter = "unread" | "all";
+
+export function parseInboxFilter(value: string | null): InboxFilter {
+  return value === "all" ? "all" : "unread";
+}
+
+export function filterInboxThreads(
+  threads: InboxThread[],
+  filter: InboxFilter,
+  pinned: ReadonlySet<string> = new Set(),
+): InboxThread[] {
+  if (filter === "all") return threads;
+  return threads.filter((thread) => isUnread(thread) || pinned.has(thread.id));
+}
+
 export function groupInboxThreads(
   threads: InboxThread[],
   now: Date = new Date(),
