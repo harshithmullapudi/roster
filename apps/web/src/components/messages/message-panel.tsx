@@ -223,6 +223,7 @@ export function MessagePanel({
           rows={rows}
           empty={messages.length === 0}
           threadsByRootMessage={threadsByRootMessage}
+          openThreadId={openThreadId}
           basePath={basePath}
           memberId={memberId}
           firstItemIndex={firstItemIndex}

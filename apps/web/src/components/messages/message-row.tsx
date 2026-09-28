@@ -19,6 +19,7 @@ export interface MessageRowProps {
   leading: boolean;
   thread?: ThreadItem;
   threadHref?: string;
+  threadOpen?: boolean;
   memberId?: string;
   onDelete?: (messageId: string) => Promise<void>;
 }
@@ -28,6 +29,7 @@ export const MessageRow = memo(function MessageRow({
   leading,
   thread,
   threadHref,
+  threadOpen = false,
   memberId,
   onDelete,
 }: MessageRowProps) {
@@ -47,7 +49,10 @@ export const MessageRow = memo(function MessageRow({
   return (
     <div
       className={cn(
-        "group/message hover:bg-grayAlpha-50 relative flex w-full gap-2.5 px-3 sm:gap-3 sm:px-5",
+        "group/message relative flex w-full gap-2.5 px-3 sm:gap-3 sm:px-5",
+        threadOpen
+          ? "bg-primary/5 hover:bg-primary/10"
+          : "hover:bg-grayAlpha-50",
         leading ? "pt-3 pb-0.5" : "py-0.5",
         message.pending && "opacity-60",
       )}
