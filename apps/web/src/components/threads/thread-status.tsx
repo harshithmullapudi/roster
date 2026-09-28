@@ -2,7 +2,13 @@
 
 import { cn } from "@roster/ui";
 
-import { isLive, isWaiting, statusLabel, statusTone } from "~/utils/thread-rows";
+import {
+  isLive,
+  isWaiting,
+  needsInput,
+  statusLabel,
+  statusTone,
+} from "~/utils/thread-rows";
 
 export interface StatusPipProps {
   tone: string;
@@ -35,6 +41,19 @@ export interface ThreadStatusProps {
 }
 
 export function ThreadStatus({ status, strong }: ThreadStatusProps) {
+  // Needs input is the one status that asks something of the reader, so it
+  // gets a chip loud enough to scan for instead of the quiet pip.
+  if (needsInput(status)) {
+    return (
+      <span className="bg-warning/15 flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5">
+        <span className="bg-warning size-1.5 rounded-full" />
+        <span className="text-foreground text-xs font-medium">
+          Needs input
+        </span>
+      </span>
+    );
+  }
+
   return (
     <StatusPip
       tone={statusTone(status) ?? "bg-muted-foreground"}
