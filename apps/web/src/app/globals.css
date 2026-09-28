@@ -419,7 +419,7 @@
   }
 
   @media (max-width: 639px) {
-    .rail-group > [data-panel]:first-of-type,
+    .rail-group:has(> [data-separator]) > [data-panel]:first-of-type,
     .rail-group > [data-separator] {
       display: none !important;
     }

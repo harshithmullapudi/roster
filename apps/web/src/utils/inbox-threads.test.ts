@@ -7,6 +7,7 @@ import {
   inboxBucket,
   isUnread,
   parseInboxFilter,
+  showsUnreadDot,
   subscriptionLabel,
 } from "./inbox-threads";
 
@@ -170,6 +171,37 @@ describe("filterInboxThreads", () => {
     expect(
       filterInboxThreads(rows, "unread", pinned).map((row) => row.id),
     ).toEqual(["unread", "read"]);
+  });
+});
+
+describe("showsUnreadDot", () => {
+  const none = new Set<string>();
+
+  it("shows the dot for an unread thread nobody opened yet", () => {
+    expect(showsUnreadDot(thread({ unread: true }), none, none)).toBe(true);
+  });
+
+  it("keeps the dot when the server marks it read but it was unread at page open", () => {
+    const pinned = new Set(["t1"]);
+    expect(showsUnreadDot(thread({ unread: false }), pinned, none)).toBe(true);
+  });
+
+  it("clears the dot once the thread has been opened this session", () => {
+    const pinned = new Set(["t1"]);
+    const opened = new Set(["t1"]);
+    expect(showsUnreadDot(thread({ unread: true }), pinned, opened)).toBe(
+      false,
+    );
+  });
+
+  it("never shows the dot for a read thread that was not pinned", () => {
+    expect(showsUnreadDot(thread({ unread: false }), none, none)).toBe(false);
+  });
+
+  it("never shows the dot for a muted thread", () => {
+    expect(
+      showsUnreadDot(thread({ unread: true, muted: true }), none, none),
+    ).toBe(false);
   });
 });
 

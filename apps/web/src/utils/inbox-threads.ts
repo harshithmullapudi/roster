@@ -44,6 +44,15 @@ export function isUnread(
   return thread.unread && !thread.muted;
 }
 
+export function showsUnreadDot(
+  thread: Pick<InboxThread, "id" | "unread" | "muted">,
+  pinned: ReadonlySet<string>,
+  opened: ReadonlySet<string>,
+): boolean {
+  if (opened.has(thread.id) || thread.muted) return false;
+  return isUnread(thread) || pinned.has(thread.id);
+}
+
 export type InboxFilter = "unread" | "needs-input" | "all";
 
 export function parseInboxFilter(value: string | null): InboxFilter {
