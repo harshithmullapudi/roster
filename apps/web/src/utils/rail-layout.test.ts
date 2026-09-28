@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseRailLayout,
   railLayoutKey,
+  railLayoutReady,
   shouldPersistRailLayout,
 } from "./rail-layout";
 
@@ -29,6 +30,17 @@ describe("parseRailLayout", () => {
 
   it("rejects a layout missing either panel", () => {
     expect(parseRailLayout('{"shell-main":100}')).toBeNull();
+  });
+});
+
+describe("railLayoutReady", () => {
+  it("is ready once both panels are registered in the group", () => {
+    expect(railLayoutReady({ "shell-main": 50, "shell-rail": 50 })).toBe(true);
+  });
+
+  it("is not ready while the group only has the main panel, where applying a saved two-panel split throws", () => {
+    expect(railLayoutReady({ "shell-main": 100 })).toBe(false);
+    expect(railLayoutReady({})).toBe(false);
   });
 });
 

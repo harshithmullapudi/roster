@@ -1,12 +1,14 @@
 "use client";
 
 import { useGroupRef } from "@roster/ui";
-import { useCallback, useLayoutEffect, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, type ReactNode } from "react";
 
 import {
   parseRailLayout,
   railLayoutKey,
+  railLayoutReady,
   shouldPersistRailLayout,
+  type RailLayout as StoredRailLayout,
 } from "~/utils/rail-layout";
 
 import { RailPanels, type RailSizes } from "./rail-panels";
@@ -27,16 +29,33 @@ export function RailLayout({ main, rail, options }: RailLayoutProps) {
   const groupRef = useGroupRef();
   const hasRail = rail !== null && rail !== undefined;
 
+  const pendingLayout = useRef<StoredRailLayout | null>(null);
+
   useLayoutEffect(() => {
-    if (!hasRail) return;
+    if (!hasRail) {
+      pendingLayout.current = null;
+      return;
+    }
     const stored = parseRailLayout(
       window.localStorage.getItem(railLayoutKey(storageId)),
     );
-    if (stored) groupRef.current?.setLayout(stored);
+    if (!stored) return;
+    const group = groupRef.current;
+    if (group && railLayoutReady(group.getLayout())) {
+      group.setLayout(stored);
+    } else {
+      pendingLayout.current = stored;
+    }
   }, [storageId, hasRail, groupRef]);
 
   const persist = useCallback(
     (layout: Record<string, number>, meta: { isUserInteraction: boolean }) => {
+      const pending = pendingLayout.current;
+      if (pending && railLayoutReady(layout)) {
+        pendingLayout.current = null;
+        groupRef.current?.setLayout(pending);
+        return;
+      }
       if (!shouldPersistRailLayout(layout, meta.isUserInteraction)) return;
       try {
         window.localStorage.setItem(
@@ -47,7 +66,7 @@ export function RailLayout({ main, rail, options }: RailLayoutProps) {
         return;
       }
     },
-    [storageId],
+    [storageId, groupRef],
   );
 
   return (
