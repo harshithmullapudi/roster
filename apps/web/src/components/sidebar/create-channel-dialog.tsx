@@ -11,14 +11,9 @@ import {
   DialogTitle,
   Input,
   Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from "@roster/ui";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { errorMessage, trpc } from "~/utils/trpc";
 
@@ -27,17 +22,7 @@ export interface CreateChannelDialogProps {
   onOpenChange: (open: boolean) => void;
   channels: Channel[];
   orgSlug: string;
-}
-
-function repoLabel(channel: Channel): string {
-  if (channel.repoOwner && channel.repoName) {
-    return `${channel.repoOwner}/${channel.repoName}`;
-  }
-  if (channel.repoName) return channel.repoName;
-  if (channel.repoPath) {
-    return channel.repoPath.split("/").filter(Boolean).pop() ?? channel.repoPath;
-  }
-  return channel.name;
+  activeChannelSlug?: string;
 }
 
 export function CreateChannelDialog({
@@ -45,26 +30,17 @@ export function CreateChannelDialog({
   onOpenChange,
   channels,
   orgSlug,
+  activeChannelSlug,
 }: CreateChannelDialogProps) {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [repoChannelId, setRepoChannelId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const repos = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const channel of channels) {
-      const label = repoLabel(channel);
-      if (!seen.has(label)) seen.set(label, channel.id);
-    }
-    return [...seen.entries()].map(([label, channelId]) => ({
-      label,
-      channelId,
-    }));
-  }, [channels]);
-
-  const sourceChannelId = repoChannelId ?? repos[0]?.channelId ?? null;
+  const sourceChannelId =
+    channels.find((channel) => channel.slug === activeChannelSlug)?.id ??
+    channels[0]?.id ??
+    null;
 
   function close(next: boolean) {
     if (pending) return;
@@ -102,8 +78,8 @@ export function CreateChannelDialog({
           <DialogHeader>
             <DialogTitle>Create a private channel</DialogTitle>
             <DialogDescription>
-              The channel gets its own Superset workspace on the repo you pick,
-              and its agent works there.
+              The channel gets its own Superset workspace, and its agent works
+              there.
             </DialogDescription>
           </DialogHeader>
 
@@ -119,28 +95,7 @@ export function CreateChannelDialog({
             />
           </div>
 
-          {repos.length > 1 ? (
-            <div className="flex flex-col gap-1.5">
-              <Label>Repository</Label>
-              <Select
-                value={sourceChannelId ?? undefined}
-                onValueChange={setRepoChannelId}
-              >
-                <SelectTrigger showIcon>
-                  <SelectValue placeholder="Pick a repository" />
-                </SelectTrigger>
-                <SelectContent>
-                  {repos.map((repo) => (
-                    <SelectItem key={repo.channelId} value={repo.channelId}>
-                      {repo.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : null}
-
-          {repos.length === 0 ? (
+          {channels.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               Add a project in settings first — a channel needs a repo to work
               in.

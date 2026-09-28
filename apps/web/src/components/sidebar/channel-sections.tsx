@@ -123,6 +123,7 @@ export function ChannelSections({
         onOpenChange={setCreating}
         channels={[...current.starred, ...current.public, ...current.private]}
         orgSlug={orgSlug}
+        activeChannelSlug={activeChannelSlug}
       />
     </div>
   );
