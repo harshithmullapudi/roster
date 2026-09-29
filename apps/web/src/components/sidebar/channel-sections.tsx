@@ -9,7 +9,7 @@ import { readCollapsed, writeCollapsed } from "~/utils/sidebar-collapse";
 import { trpc } from "~/utils/trpc";
 
 import { ChannelSection } from "./channel-section";
-import { NewChannelForm } from "./new-channel-form";
+import { NewChannelDialog } from "./new-channel-form";
 
 export interface ChannelSectionsProps {
   groups: ChannelGroups;
@@ -110,12 +110,16 @@ export function ChannelSections({
           activeChannelSlug={activeChannelSlug}
           attention={attention}
           canManage={canManage}
+          action={
+            section.key === "private" && canManage ? (
+              <NewChannelDialog orgSlug={orgSlug} />
+            ) : undefined
+          }
           onOpenChange={(open) => setOpen(section.key, open)}
           onToggleStar={toggleStar}
           onChangeVisibility={changeVisibility}
         />
       ))}
-      {canManage ? <NewChannelForm orgSlug={orgSlug} /> : null}
     </div>
   );
 }

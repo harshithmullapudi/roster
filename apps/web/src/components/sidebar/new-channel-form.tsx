@@ -2,6 +2,11 @@
 
 import {
   Button,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Input,
   Select,
   SelectContent,
@@ -9,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@roster/ui";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 
@@ -21,7 +26,7 @@ interface AgentChoice {
   folderName: string;
 }
 
-export function NewChannelForm({ orgSlug }: { orgSlug: string }) {
+export function NewChannelDialog({ orgSlug }: { orgSlug: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -61,6 +66,7 @@ export function NewChannelForm({ orgSlug }: { orgSlug: string }) {
       });
       setOpen(false);
       setName("");
+      setAgentId("");
       router.push(`/${orgSlug}/${made.slug}`);
       router.refresh();
     } catch (cause) {
@@ -70,81 +76,87 @@ export function NewChannelForm({ orgSlug }: { orgSlug: string }) {
     }
   }
 
-  if (!open) {
-    return (
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
       <Button
         variant="ghost"
         size="sm"
-        className="text-muted-foreground mx-2 mt-1 justify-start gap-1"
+        aria-label="New channel"
+        className="text-muted-foreground hover:text-foreground h-5 w-5 shrink-0 !rounded-md p-0"
         onClick={() => setOpen(true)}
       >
-        <Plus size={14} />
-        New channel
+        <Plus size={13} />
       </Button>
-    );
-  }
 
-  return (
-    <form
-      onSubmit={submit}
-      className="border-border mx-2 mt-1 flex flex-col gap-2 rounded-lg border border-dashed p-2"
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">New channel</span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setOpen(false)}
-        >
-          <X size={14} />
-        </Button>
-      </div>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>New channel</DialogTitle>
+        </DialogHeader>
 
-      <Input
-        placeholder="bugs"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        aria-label="Channel name"
-        autoFocus
-      />
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="text-muted-foreground">Name</span>
+            <Input
+              placeholder="bugs"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              aria-label="Channel name"
+              autoFocus
+            />
+          </label>
 
-      <Select
-        value={agentId || undefined}
-        onValueChange={setAgentId}
-        disabled={agents === null || agents.length === 0}
-      >
-        <SelectTrigger showIcon aria-label="Default agent" className="w-full">
-          <SelectValue
-            placeholder={
-              agents === null
-                ? "Loading agents…"
-                : agents.length === 0
-                  ? "No agents yet — connect a folder first"
-                  : "Default agent"
-            }
-          />
-        </SelectTrigger>
-        <SelectContent>
-          {(agents ?? []).map((agent) => (
-            <SelectItem key={agent.id} value={agent.id}>
-              @{agent.handle} — {agent.folderName}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="text-muted-foreground">Default agent</span>
+            <Select
+              value={agentId || undefined}
+              onValueChange={setAgentId}
+              disabled={agents === null || agents.length === 0}
+            >
+              <SelectTrigger
+                showIcon
+                aria-label="Default agent"
+                className="w-full"
+              >
+                <SelectValue
+                  placeholder={
+                    agents === null
+                      ? "Loading agents…"
+                      : agents.length === 0
+                        ? "No agents yet — connect a folder first"
+                        : "Pick who answers here"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {(agents ?? []).map((agent) => (
+                  <SelectItem key={agent.id} value={agent.id}>
+                    @{agent.handle} — {agent.folderName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
 
-      {error ? <p className="text-destructive text-xs">{error}</p> : null}
+          {error ? <p className="text-destructive text-sm">{error}</p> : null}
 
-      <div>
-        <Button
-          type="submit"
-          size="sm"
-          disabled={pending || !name.trim() || !agentId}
-        >
-          {pending ? "Creating…" : "Create channel"}
-        </Button>
-      </div>
-    </form>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setOpen(false)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={pending || !name.trim() || !agentId}
+            >
+              {pending ? "Creating…" : "Create channel"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

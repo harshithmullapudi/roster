@@ -3,7 +3,11 @@
 import {
   Badge,
   Button,
-  cn,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Input,
   Select,
   SelectContent,
@@ -11,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@roster/ui";
-import { Check, ChevronRight, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 
 import { errorMessage, trpc } from "~/utils/trpc";
@@ -39,6 +43,7 @@ export function AgentManager({ agents, folders }: AgentManagerProps) {
   const [rows, setRows] = useState(agents);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
+  const [editing, setEditing] = useState<AgentRow | null>(null);
 
   const byFolder = useMemo(() => {
     const grouped = new Map<string, AgentRow[]>();
@@ -60,35 +65,16 @@ export function AgentManager({ agents, folders }: AgentManagerProps) {
     setAdding(null);
   }
 
-  async function archive(agent: AgentRow) {
-    setError(null);
-    try {
-      await trpc.agents.archive.mutate({ agentId: agent.id });
-      setRows((current) => current.filter((row) => row.id !== agent.id));
-    } catch (cause) {
-      setError(errorMessage(cause, "Couldn't archive that agent."));
-    }
+  function saved(agent: AgentRow) {
+    setRows((current) =>
+      current.map((row) => (row.id === agent.id ? agent : row)),
+    );
+    setEditing(null);
   }
 
-  async function moved(agent: AgentRow, folderId: string) {
-    setError(null);
-    const folder = folders.find((row) => row.id === folderId);
-    if (!folder || agent.folderId === folderId) return;
-
-    const previous = rows;
-    setRows((current) =>
-      current.map((row) =>
-        row.id === agent.id
-          ? { ...row, folderId, folderName: folder.name }
-          : row,
-      ),
-    );
-    try {
-      await trpc.agents.update.mutate({ agentId: agent.id, folderId });
-    } catch (cause) {
-      setRows(previous);
-      setError(errorMessage(cause, "Couldn't move that agent."));
-    }
+  function archived(agent: AgentRow) {
+    setRows((current) => current.filter((row) => row.id !== agent.id));
+    setEditing(null);
   }
 
   return (
@@ -136,13 +122,25 @@ export function AgentManager({ agents, folders }: AgentManagerProps) {
             {theirs.length > 0 ? (
               <ul className="bg-background-3 flex flex-col divide-y rounded-lg">
                 {theirs.map((agent) => (
-                  <AgentCard
-                    key={agent.id}
-                    agent={agent}
-                    folders={folders}
-                    onArchive={() => archive(agent)}
-                    onMove={(folderId) => moved(agent, folderId)}
-                  />
+                  <li key={agent.id}>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(agent)}
+                      className="hover:bg-grayAlpha-100 flex w-full items-center gap-2 px-4 py-3 text-left"
+                    >
+                      <code className="text-foreground shrink-0 font-mono text-sm">
+                        @{agent.handle}
+                      </code>
+                      {agent.main ? (
+                        <Badge variant="secondary" className="shrink-0">
+                          default
+                        </Badge>
+                      ) : null}
+                      <span className="text-muted-foreground min-w-0 truncate text-xs">
+                        {agent.brief?.split("\n")[0]?.trim() || "no brief"}
+                      </span>
+                    </button>
+                  </li>
                 ))}
               </ul>
             ) : (
@@ -161,110 +159,107 @@ export function AgentManager({ agents, folders }: AgentManagerProps) {
           </div>
         );
       })}
+
+      {editing ? (
+        <AgentEditDialog
+          agent={editing}
+          folders={folders}
+          onClose={() => setEditing(null)}
+          onSaved={saved}
+          onArchived={archived}
+        />
+      ) : null}
     </section>
   );
 }
 
-function AgentCard({
+function AgentEditDialog({
   agent,
   folders,
-  onArchive,
-  onMove,
+  onClose,
+  onSaved,
+  onArchived,
 }: {
   agent: AgentRow;
   folders: FolderOption[];
-  onArchive: () => void;
-  onMove: (folderId: string) => void;
+  onClose: () => void;
+  onSaved: (agent: AgentRow) => void;
+  onArchived: (agent: AgentRow) => void;
 }) {
+  const [name, setName] = useState(agent.handle);
   const [brief, setBrief] = useState(agent.brief ?? "");
-  const [saved, setSaved] = useState(agent.brief ?? "");
-  const [open, setOpen] = useState(false);
+  const [folderId, setFolderId] = useState(agent.folderId);
   const [pending, setPending] = useState(false);
-  const [justSaved, setJustSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const dirty = brief.trim() !== saved.trim();
-  const summary = saved.split("\n")[0]?.trim() ?? "";
+  const dirty =
+    name.trim() !== agent.handle ||
+    brief.trim() !== (agent.brief ?? "").trim() ||
+    folderId !== agent.folderId;
 
   async function save() {
+    if (pending) return;
     setPending(true);
     setError(null);
-    setJustSaved(false);
 
     const next = brief.trim();
     try {
-      await trpc.agents.setBrief.mutate({
+      const updated = await trpc.agents.update.mutate({
         agentId: agent.id,
+        name: name.trim() || undefined,
         brief: next.length > 0 ? next : null,
+        folderId,
       });
-      setSaved(next);
-      setJustSaved(true);
+      onSaved({
+        id: updated.id,
+        handle: updated.handle,
+        brief: updated.brief,
+        folderId: updated.folderId,
+        folderName: updated.folderName,
+        main: updated.main,
+      });
     } catch (cause) {
-      setError(errorMessage(cause, "Couldn't save that brief."));
-    } finally {
+      setError(errorMessage(cause, "Couldn't save that agent."));
+      setPending(false);
+    }
+  }
+
+  async function archive() {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      await trpc.agents.archive.mutate({ agentId: agent.id });
+      onArchived(agent);
+    } catch (cause) {
+      setError(errorMessage(cause, "Couldn't archive that agent."));
       setPending(false);
     }
   }
 
   return (
-    <li className="flex flex-col px-4 py-3">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-          aria-expanded={open}
-        >
-          <ChevronRight
-            size={14}
-            className={cn(
-              "text-muted-foreground shrink-0 transition-transform",
-              open && "rotate-90",
-            )}
-          />
-          <code className="text-foreground shrink-0 font-mono text-sm">
+    <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="font-mono text-base">
             @{agent.handle}
-          </code>
-          {agent.main ? (
-            <Badge variant="secondary" className="shrink-0">
-              default
-            </Badge>
-          ) : null}
-          {!open ? (
-            <span className="text-muted-foreground min-w-0 truncate text-xs">
-              {summary || "no brief"}
-            </span>
-          ) : null}
-        </button>
+          </DialogTitle>
+        </DialogHeader>
 
-        {justSaved && !dirty ? (
-          <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
-            <Check size={12} />
-            saved
-          </span>
-        ) : null}
-        {!agent.main ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground shrink-0"
-            onClick={onArchive}
-          >
-            Archive
-          </Button>
-        ) : null}
-      </div>
+        <div className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="text-muted-foreground">Name</span>
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              aria-label="Agent name"
+            />
+          </label>
 
-      {open ? (
-        <div className="mt-2 flex flex-col gap-2 pl-6">
-          <div className="flex items-center gap-2 text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             <span className="text-muted-foreground">Folder</span>
-            <Select value={agent.folderId} onValueChange={onMove}>
-              <SelectTrigger
-                showIcon
-                aria-label={`Folder for @${agent.handle}`}
-                className="w-56"
-              >
+            <Select value={folderId} onValueChange={setFolderId}>
+              <SelectTrigger showIcon aria-label="Folder" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -275,40 +270,47 @@ function AgentCard({
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </label>
 
-          <textarea
-            aria-label={`Brief for @${agent.handle}`}
-            value={brief}
-            onChange={(event) => {
-              setBrief(event.target.value);
-              setJustSaved(false);
-            }}
-            rows={4}
-            placeholder="What this one is here to do. It is read at the top of every session."
-            className="border-border bg-background focus-visible:ring-ring min-h-20 w-full resize-y rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-1"
-          />
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="text-muted-foreground">Brief</span>
+            <textarea
+              value={brief}
+              onChange={(event) => setBrief(event.target.value)}
+              rows={5}
+              placeholder="What this one is here to do. It is read at the top of every session."
+              aria-label={`Brief for @${agent.handle}`}
+              className="border-border bg-background focus-visible:ring-ring min-h-24 w-full resize-y rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-1"
+            />
+          </label>
 
-          {error ? <p className="text-destructive text-xs">{error}</p> : null}
-
-          {dirty ? (
-            <div className="flex items-center gap-2">
-              <Button size="sm" onClick={save} disabled={pending}>
-                {pending ? "Saving…" : "Save brief"}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setBrief(saved)}
-                disabled={pending}
-              >
-                Revert
-              </Button>
-            </div>
-          ) : null}
+          {error ? <p className="text-destructive text-sm">{error}</p> : null}
         </div>
-      ) : null}
-    </li>
+
+        <DialogFooter className="sm:justify-between">
+          {!agent.main ? (
+            <Button
+              variant="ghost"
+              className="text-muted-foreground"
+              onClick={archive}
+              disabled={pending}
+            >
+              Archive
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={pending}>
+              Cancel
+            </Button>
+            <Button onClick={save} disabled={pending || !dirty}>
+              {pending ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
