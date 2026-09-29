@@ -9,6 +9,7 @@ import {
   parseInboxFilter,
   showsUnreadDot,
   subscriptionLabel,
+  trackOpenThread,
 } from "./inbox-threads";
 
 const NOW = new Date("2026-09-20T15:00:00");
@@ -202,6 +203,44 @@ describe("showsUnreadDot", () => {
     expect(
       showsUnreadDot(thread({ unread: true, muted: true }), none, none),
     ).toBe(false);
+  });
+});
+
+describe("trackOpenThread", () => {
+  const state = (pinned: string[], opened: string[]) => ({
+    pinned: new Set(pinned),
+    opened: new Set(opened),
+  });
+
+  it("records the open thread while the pane is up", () => {
+    const next = trackOpenThread(state(["t1", "t2"], []), "t1");
+    expect([...next.opened]).toEqual(["t1"]);
+    expect([...next.pinned]).toEqual(["t1", "t2"]);
+  });
+
+  it("unpins every thread opened this session when the pane closes", () => {
+    const next = trackOpenThread(state(["t1", "t2"], ["t1", "t2"]), null);
+    expect([...next.pinned]).toEqual([]);
+  });
+
+  it("keeps untouched threads pinned when the pane closes", () => {
+    const next = trackOpenThread(state(["t1", "t2"], ["t1"]), null);
+    expect([...next.pinned]).toEqual(["t2"]);
+  });
+
+  it("forgets opened threads on close so later activity shows a dot again", () => {
+    const next = trackOpenThread(state(["t1"], ["t1"]), null);
+    expect(next.opened.size).toBe(0);
+    expect(showsUnreadDot(thread({ unread: true }), next.pinned, next.opened)).toBe(
+      true,
+    );
+  });
+
+  it("returns the same state when nothing changes", () => {
+    const open = state(["t1"], ["t1"]);
+    expect(trackOpenThread(open, "t1")).toBe(open);
+    const closed = state(["t1"], []);
+    expect(trackOpenThread(closed, null)).toBe(closed);
   });
 });
 
