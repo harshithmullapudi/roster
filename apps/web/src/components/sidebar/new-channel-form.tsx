@@ -97,7 +97,7 @@ export function NewChannelDialog({ orgSlug }: { orgSlug: string }) {
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="text-muted-foreground">Name</span>
             <Input
-              placeholder="bugs"
+              placeholder="e.g. bugs"
               value={name}
               onChange={(event) => setName(event.target.value)}
               aria-label="Channel name"
