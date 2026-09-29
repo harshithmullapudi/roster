@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@roster/ui";
 import { SquareTerminal } from "lucide-react";
+import { useState } from "react";
 
 import { CountFlash } from "~/components/threads/count-flash";
 import { SessionCounts } from "~/components/threads/session-counts";
@@ -19,9 +20,12 @@ import { useDock } from "./dock-provider";
 /*
  * The bar counts across every channel the member can see, not just the one on
  * screen, so it reads the same on Threads and Tasks as it does inside a
- * channel. Clicking it opens the dock — the folder picker works everywhere.
+ * channel. Clicking it opens the sessions popover; only the Agent button
+ * expands the dock, so a click aimed at the counts never moves the layout.
  */
-function OrgCounts({ orgSlug, onOpen }: { orgSlug: string; onOpen: () => void }) {
+function OrgCounts({ orgSlug }: { orgSlug: string }) {
+  const [cardOpen, setCardOpen] = useState(false);
+
   const { data: liveThreads } = useQuery({
     queryKey: liveThreadsKey(),
     queryFn: () => trpc.threads.live.query(),
@@ -40,12 +44,8 @@ function OrgCounts({ orgSlug, onOpen }: { orgSlug: string; onOpen: () => void })
 
   if (open === 0 && sessions.length === 0) return null;
 
-  const button = (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-2.5 text-xs"
-    >
+  const countsRow = (
+    <>
       <CountFlash value={open} className={cn(open <= 0 && "hidden")}>
         {open} open
       </CountFlash>
@@ -55,13 +55,21 @@ function OrgCounts({ orgSlug, onOpen }: { orgSlug: string; onOpen: () => void })
         turnDone={counts.turnDone}
         labeled
       />
-    </button>
+    </>
   );
 
-  if (sessions.length === 0) return button;
+  if (sessions.length === 0) {
+    return (
+      <span className="text-muted-foreground flex shrink-0 items-center gap-2.5 text-xs">
+        {countsRow}
+      </span>
+    );
+  }
 
   return (
     <SessionsHoverCard
+      open={cardOpen}
+      onOpenChange={setCardOpen}
       threads={sessions.map((thread) => ({
         id: thread.id,
         rootText: thread.rootText,
@@ -76,13 +84,19 @@ function OrgCounts({ orgSlug, onOpen }: { orgSlug: string; onOpen: () => void })
       side="top"
       align="end"
     >
-      {button}
+      <button
+        type="button"
+        onClick={() => setCardOpen(true)}
+        className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-2.5 text-xs"
+      >
+        {countsRow}
+      </button>
     </SessionsHoverCard>
   );
 }
 
 export function DockStatusBar({ orgSlug }: { orgSlug: string }) {
-  const { mode, setMode, toggle } = useDock();
+  const { mode, toggle } = useDock();
 
   return (
     <footer
@@ -91,7 +105,7 @@ export function DockStatusBar({ orgSlug }: { orgSlug: string }) {
         mode === "open" ? "px-1.5 py-1" : "p-2",
       )}
     >
-      <OrgCounts orgSlug={orgSlug} onOpen={() => setMode("open")} />
+      <OrgCounts orgSlug={orgSlug} />
 
       <button
         type="button"

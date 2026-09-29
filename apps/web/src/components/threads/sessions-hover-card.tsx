@@ -30,6 +30,8 @@ export interface SessionsHoverCardProps {
   heading: string;
   side: "top" | "right";
   align: "start" | "end";
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   children: ReactNode;
 }
 
@@ -91,12 +93,19 @@ export function SessionsHoverCard({
   heading,
   side,
   align,
+  open,
+  onOpenChange,
   children,
 }: SessionsHoverCardProps) {
   const groups = groupByChannel(threads);
 
   return (
-    <HoverCard openDelay={120} closeDelay={120}>
+    <HoverCard
+      openDelay={120}
+      closeDelay={120}
+      open={open}
+      onOpenChange={onOpenChange}
+    >
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
 
       <HoverCardPortal>
