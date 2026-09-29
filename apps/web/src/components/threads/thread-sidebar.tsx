@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { OpenSessionButton } from "~/components/terminals/open-session-button";
 
+import { CloseOnEscape } from "./close-on-escape";
 import { ThreadMenu } from "./thread-menu";
 import { ThreadPanel } from "./thread-panel";
 
@@ -29,6 +30,7 @@ export function ThreadSidebar({
 }: ThreadSidebarProps) {
   return (
     <aside className="border-border flex h-full w-full min-w-0 flex-1 flex-col sm:border-l">
+      <CloseOnEscape href={closeHref} />
       <header className="pt-safe relative flex shrink-0 flex-col border-b border-gray-300">
         <div className="h-(--header-height) flex items-center gap-1.5 px-2 sm:px-3">
           <Button
