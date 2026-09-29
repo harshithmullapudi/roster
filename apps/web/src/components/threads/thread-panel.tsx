@@ -310,7 +310,7 @@ export function ThreadPanel({
         />
       ) : null}
 
-      <div className="pb-safe-2 shrink-0 px-2 pt-2 sm:px-3 sm:pb-3">
+      <div className="pb-safe-2 shrink-0 px-3 pt-2 sm:px-5 sm:pb-5">
         <Composer
           placeholder={asking ? "Answer…" : "Reply…"}
           projectId={projectId}
