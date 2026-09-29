@@ -21,8 +21,13 @@ export const EmojiList = forwardRef<
   SuggestionProps<EmojiItem, EmojiItem>
 >(function EmojiList({ items, command, query }, ref) {
   const [selected, setSelected] = useState(0);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => setSelected(0), [items]);
+
+  useEffect(() => {
+    listRef.current?.children[selected]?.scrollIntoView({ block: "nearest" });
+  }, [selected, items]);
 
   function choose(index: number) {
     const item = items[index];
@@ -62,7 +67,10 @@ export const EmojiList = forwardRef<
   if (items.length === 0) return null;
 
   return (
-    <div className="bg-background-3 border-border flex w-70 flex-col gap-0.5 rounded-lg border p-1 shadow-md">
+    <div
+      ref={listRef}
+      className="bg-background-3 border-border flex max-h-72 w-70 flex-col gap-0.5 overflow-y-auto rounded-lg border p-1 shadow-md"
+    >
       {items.map((item, index) => (
         <button
           key={item.hexcode}

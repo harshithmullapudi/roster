@@ -247,6 +247,7 @@ export function Composer({
         onChange={(event) => {
           attachments.addFiles(Array.from(event.target.files ?? []));
           event.target.value = "";
+          editor.commands.focus();
         }}
       />
 

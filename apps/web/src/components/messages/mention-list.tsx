@@ -7,6 +7,7 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useRef,
   useState,
 } from "react";
 
@@ -26,8 +27,13 @@ export const MentionList = forwardRef<
   SuggestionProps<MentionItem, MentionAttrs>
 >(function MentionList({ items, command }, ref) {
   const [selected, setSelected] = useState(0);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => setSelected(0), [items]);
+
+  useEffect(() => {
+    listRef.current?.children[selected]?.scrollIntoView({ block: "nearest" });
+  }, [selected, items]);
 
   function choose(index: number) {
     const item = items[index];
@@ -63,7 +69,10 @@ export const MentionList = forwardRef<
   }
 
   return (
-    <div className="bg-background-3 border-border flex w-70 flex-col gap-0.5 rounded-lg border p-1 shadow-md">
+    <div
+      ref={listRef}
+      className="bg-background-3 border-border flex max-h-72 w-70 flex-col gap-0.5 overflow-y-auto rounded-lg border p-1 shadow-md"
+    >
       {items.map((item, index) => (
         <button
           key={item.id}
