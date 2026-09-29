@@ -8,6 +8,7 @@ import {
   markChannelSeen,
 } from "../services/channel-reads";
 import {
+  createChannel,
   dismissChannelPause,
   getChannelBySlug,
   listChannels,
@@ -73,10 +74,10 @@ export const channelsRouter = createTRPCRouter({
 
     return [
       ...agents.map((agent) => ({
-        id: agent.projectId,
+        id: agent.id,
         kind: "agent" as const,
-        slug: agent.channelSlug,
-        name: agent.channelName,
+        slug: agent.handle,
+        name: agent.folderName,
         visibility: "public",
         handle: agent.handle,
         display: agent.handle,
@@ -188,6 +189,7 @@ export const channelsRouter = createTRPCRouter({
       z.object({
         projectId: z.string().uuid(),
         visibility: z.enum(CHANNEL_VISIBILITIES).optional(),
+        defaultAgentId: z.string().uuid().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -205,6 +207,33 @@ export const channelsRouter = createTRPCRouter({
       return {
         id: channel.id,
         slug: channel.slug,
+        visibility: channel.visibility,
+        defaultAgentId: channel.defaultAgentId,
+      };
+    }),
+
+  create: capabilityProcedure("channel:update")
+    .input(
+      z.object({
+        name: z.string().min(1).max(80),
+        defaultAgentId: z.string().uuid(),
+        visibility: z.enum(CHANNEL_VISIBILITIES).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const channel = await createChannel({
+        organizationId: ctx.organizationId,
+        memberId: ctx.member.id,
+        role: ctx.member.role,
+        name: input.name,
+        defaultAgentId: input.defaultAgentId,
+        visibility: input.visibility,
+      });
+
+      return {
+        id: channel.id,
+        slug: channel.slug,
+        name: channel.name,
         visibility: channel.visibility,
       };
     }),

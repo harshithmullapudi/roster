@@ -7,28 +7,16 @@ import {
   createAgent,
   listAgents,
   setAgentBrief,
+  updateAgent,
 } from "../services/agents";
-import { type ChannelScope, requireOrgProject } from "../services/channels";
+import type { ChannelScope } from "../services/channels";
 import { createTRPCRouter, memberProcedure } from "../trpc";
-
-async function reachableChannel(scope: ChannelScope, projectId: string) {
-  const project = await requireOrgProject({ ...scope, projectId });
-  if (!project) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "That channel is not one you can see.",
-    });
-  }
-  return project;
-}
 
 async function ownAgent(scope: ChannelScope, agentId: string) {
   const agent = await agentById(agentId);
-  if (!agent) {
+  if (!agent || agent.organizationId !== scope.organizationId) {
     throw new TRPCError({ code: "NOT_FOUND", message: "No such agent." });
   }
-
-  await reachableChannel(scope, agent.projectId);
   return agent;
 }
 
@@ -45,27 +33,45 @@ function scopeOf(ctx: {
 
 export const agentsRouter = createTRPCRouter({
   list: memberProcedure
-    .input(z.object({ channelId: z.string().uuid().optional() }).optional())
+    .input(z.object({ folderId: z.string().uuid().optional() }).optional())
     .query(({ ctx, input }) =>
-      listAgents(scopeOf(ctx), { projectId: input?.channelId }),
+      listAgents(scopeOf(ctx), { folderId: input?.folderId }),
     ),
 
   create: memberProcedure
     .input(
       z.object({
-        channelId: z.string().uuid(),
+        folderId: z.string().uuid(),
         name: z.string().min(1).max(60),
         brief: z.string().max(4000).optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
-      await reachableChannel(scopeOf(ctx), input.channelId);
-
-      return createAgent({
+    .mutation(async ({ ctx, input }) =>
+      createAgent({
         organizationId: ctx.organizationId,
-        projectId: input.channelId,
+        folderId: input.folderId,
         name: input.name,
         brief: input.brief ?? null,
+      }),
+    ),
+
+  update: memberProcedure
+    .input(
+      z.object({
+        agentId: z.string().uuid(),
+        name: z.string().min(1).max(60).optional(),
+        brief: z.string().max(4000).nullable().optional(),
+        folderId: z.string().uuid().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ownAgent(scopeOf(ctx), input.agentId);
+      return updateAgent({
+        organizationId: ctx.organizationId,
+        id: input.agentId,
+        name: input.name,
+        brief: input.brief,
+        folderId: input.folderId,
       });
     }),
 

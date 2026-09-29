@@ -1,18 +1,32 @@
 "use client";
 
 import type { ChannelVisibility } from "@roster/api";
-import { cn } from "@roster/ui";
+import {
+  cn,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@roster/ui";
 import { Check, Globe, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { errorMessage, trpc } from "~/utils/trpc";
 
+export interface ChannelAgentOption {
+  id: string;
+  handle: string;
+  folderName: string;
+}
+
 export interface ChannelSettingsProps {
   projectId: string;
   name: string;
   slug: string;
-  repo: string | null;
+  defaultAgentId: string;
+  agents: ChannelAgentOption[];
   visibility: ChannelVisibility;
   canManage: boolean;
 }
@@ -42,7 +56,8 @@ export function ChannelSettings({
   projectId,
   name,
   slug,
-  repo,
+  defaultAgentId,
+  agents,
   visibility,
   canManage,
 }: ChannelSettingsProps) {
@@ -50,6 +65,32 @@ export function ChannelSettings({
   const [current, setCurrent] = useState<ChannelVisibility>(visibility);
   const [pending, setPending] = useState<ChannelVisibility | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [agentId, setAgentId] = useState(defaultAgentId);
+  const [agentPending, setAgentPending] = useState(false);
+  const [agentError, setAgentError] = useState<string | null>(null);
+
+  const chosen = agents.find((agent) => agent.id === agentId);
+
+  async function chooseAgent(next: string) {
+    if (!canManage || next === agentId || agentPending) return;
+
+    const previous = agentId;
+    setAgentId(next);
+    setAgentPending(true);
+    setAgentError(null);
+
+    try {
+      await trpc.channels.update.mutate({ projectId, defaultAgentId: next });
+      router.refresh();
+    } catch (cause) {
+      setAgentId(previous);
+      setAgentError(
+        errorMessage(cause, "Couldn't change who answers this channel."),
+      );
+    } finally {
+      setAgentPending(false);
+    }
+  }
 
   async function choose(next: ChannelVisibility) {
     if (!canManage || next === current || pending) return;
@@ -77,8 +118,40 @@ export function ChannelSettings({
         <dl className="bg-background-3 text-foreground mt-2 flex flex-col divide-y rounded text-sm">
           <Row label="Name" value={name} />
           <Row label="Channel" value={`#${slug}`} />
-          {repo ? <Row label="Repository" value={repo} /> : null}
+          {chosen ? <Row label="Folder" value={chosen.folderName} /> : null}
         </dl>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-medium">Default agent</h2>
+        <p className="text-muted-foreground mt-0.5 text-sm">
+          {canManage
+            ? "Who answers when a message lands in this channel. Its folder is where the work happens."
+            : "Only team owners and admins can change this."}
+        </p>
+
+        <div className="mt-2">
+          <Select
+            value={agentId}
+            disabled={!canManage || agentPending}
+            onValueChange={chooseAgent}
+          >
+            <SelectTrigger showIcon aria-label="Default agent" className="w-72">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {agents.map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  @{agent.handle} — {agent.folderName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {agentError ? (
+          <p className="text-destructive mt-2 text-sm">{agentError}</p>
+        ) : null}
       </section>
 
       <section>

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   db,
+  folders,
   members,
   messages,
   organizations,
@@ -24,9 +25,12 @@ export interface Fixture {
   userId: string;
   memberId: string;
   projectId: string;
+  folderId: string;
   channel(slug: string): Promise<string>;
+  folderFor(projectId?: string): string;
   agentFor(projectId?: string): string;
   agent(projectId: string, handle: string, brief?: string): Promise<string>;
+  agentInFolder(folderId: string, handle: string, brief?: string): Promise<string>;
   thread(args?: { status?: string; text?: string }): Promise<FixtureThread>;
   cleanup(): Promise<void>;
 }
@@ -74,24 +78,37 @@ export async function makeFixture(name: string): Promise<Fixture> {
   });
 
   const agents = new Map<string, string>();
+  const projectFolders = new Map<string, string>();
 
   async function addProject(id: string, slug: string): Promise<string> {
-    await db.insert(projects).values({
-      id,
+    const folderId = randomUUID();
+    await db.insert(folders).values({
+      id: folderId,
       organizationId: orgId,
       supersetProjectId: `superset-${slug}-${id.slice(0, 8)}`,
       supersetHostId: "host-1",
       supersetOrgId: orgId,
       name: slug,
+      ownerMemberId: memberId,
+    });
+    projectFolders.set(id, folderId);
+
+    const agentId = await addAgent(folderId, slug);
+    if (!agents.has(id)) agents.set(id, agentId);
+
+    await db.insert(projects).values({
+      id,
+      organizationId: orgId,
+      name: slug,
       slug,
+      defaultAgentId: agentId,
       addedByMemberId: memberId,
     });
-    await addAgent(id, slug);
     return id;
   }
 
   async function addAgent(
-    target: string,
+    folderId: string,
     handle: string,
     brief?: string,
   ): Promise<string> {
@@ -103,12 +120,11 @@ export async function makeFixture(name: string): Promise<Fixture> {
         role: "member",
         type: "agent",
         agentName: handle,
-        projectId: target,
+        folderId,
         brief: brief ?? null,
       })
       .returning({ id: members.id });
 
-    if (!agents.has(target)) agents.set(target, row!.id);
     return row!.id;
   }
 
@@ -128,12 +144,19 @@ export async function makeFixture(name: string): Promise<Fixture> {
     userId,
     memberId,
     projectId,
+    folderId: projectFolders.get(projectId)!,
 
     channel: (slug) => addProject(randomUUID(), slug),
 
+    folderFor: (target) => projectFolders.get(target ?? projectId) ?? "",
+
     agentFor: (target) => agents.get(target ?? projectId) ?? "",
 
-    agent: (target, handle, brief) => addAgent(target, handle, brief),
+    agent: (target, handle, brief) =>
+      addAgent(projectFolders.get(target)!, handle, brief),
+
+    agentInFolder: (folderId, handle, brief) =>
+      addAgent(folderId, handle, brief),
 
     async thread(args = {}) {
       const [root] = await db
@@ -186,6 +209,11 @@ export async function makeFixture(name: string): Promise<Fixture> {
       await db.delete(threads).where(eq(threads.organizationId, orgId));
       await db.delete(messages).where(eq(messages.organizationId, orgId));
       await db.delete(projects).where(eq(projects.organizationId, orgId));
+      await db
+        .update(members)
+        .set({ folderId: null })
+        .where(eq(members.organizationId, orgId));
+      await db.delete(folders).where(eq(folders.organizationId, orgId));
       await db.delete(members).where(eq(members.organizationId, orgId));
       await db.delete(organizations).where(eq(organizations.id, orgId));
       await db.delete(users).where(eq(users.id, userId));

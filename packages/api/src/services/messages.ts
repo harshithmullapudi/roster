@@ -1,4 +1,4 @@
-import { listAgents } from "./agents";
+import { type Agent, listAgents } from "./agents";
 import {
   db,
   delegations,
@@ -6,6 +6,7 @@ import {
   messages,
   projects,
   threads,
+  threadSessions,
   users,
 } from "@roster/db";
 import {
@@ -48,6 +49,7 @@ import {
   createThread,
   ensureStarted,
   joinableThread,
+  joinThread,
   reapThread,
   startSession,
   steer,
@@ -278,9 +280,9 @@ export async function sendMessage(args: {
     throw new Error("That thread is not part of this channel.");
   }
 
-  const addressed = (await channelIsWatching(args.projectId))
-    ? true
-    : await mentionsAnyAgent(args);
+  const mentioned = await mentionedAgents(args);
+  const addressed =
+    mentioned.length > 0 || (await channelIsWatching(args.projectId));
 
   const target =
     explicit ??
@@ -336,12 +338,59 @@ export async function sendMessage(args: {
   if (row.kind !== "user") return row;
 
   if (target) {
-    void steer({ threadId: target.id, text: agentText(row) }).catch(() => {});
+    void routeThreadReply({
+      threadId: target.id,
+      projectId: args.projectId,
+      mentioned,
+      text: agentText(row),
+    }).catch(() => {});
   } else if (row.parentMessageId === null && addressed) {
-    void driveSession(row).catch(() => {});
+    void driveSession(row, mentioned[0]?.id).catch(() => {});
   }
 
   return row;
+}
+
+/**
+ * A plain reply steers whoever is already running the thread. Naming an
+ * agent routes to it instead — steering its live session when it has one,
+ * bringing it into the thread when it does not.
+ */
+async function routeThreadReply(args: {
+  threadId: string;
+  projectId: string;
+  mentioned: Agent[];
+  text: string;
+}): Promise<void> {
+  if (args.mentioned.length === 0) {
+    await steer({ threadId: args.threadId, text: args.text });
+    return;
+  }
+
+  for (const agent of args.mentioned) {
+    const inThread = await db.query.threadSessions.findFirst({
+      where: and(
+        eq(threadSessions.threadId, args.threadId),
+        eq(threadSessions.agentMemberId, agent.id),
+      ),
+      columns: { id: true },
+    });
+
+    if (inThread) {
+      await steer({
+        threadId: args.threadId,
+        agentMemberId: agent.id,
+        text: args.text,
+      });
+    } else {
+      await joinThread({
+        threadId: args.threadId,
+        agentMemberId: agent.id,
+        projectId: args.projectId,
+        text: args.text,
+      });
+    }
+  }
 }
 
 export function agentText(message: ChannelMessage): string {
@@ -356,13 +405,13 @@ async function channelIsWatching(projectId: string): Promise<boolean> {
   return row?.watchEnabled ?? false;
 }
 
-async function mentionsAnyAgent(args: {
+async function mentionedAgents(args: {
   organizationId: string;
   authorMemberId: string;
   role: string;
   body: unknown;
   text: string;
-}): Promise<boolean> {
+}): Promise<Agent[]> {
   const scope = {
     organizationId: args.organizationId,
     memberId: args.authorMemberId,
@@ -381,7 +430,11 @@ async function mentionsAnyAgent(args: {
     members: people.map((person) => person.handle),
   });
 
-  return mentioned.agents.length > 0;
+  const byHandle = new Map(agents.map((agent) => [agent.handle, agent]));
+  return mentioned.agents.flatMap((handle) => {
+    const agent = byHandle.get(handle);
+    return agent ? [agent] : [];
+  });
 }
 
 async function contextFor(message: ChannelMessage): Promise<string[]> {
@@ -418,7 +471,10 @@ async function contextFor(message: ChannelMessage): Promise<string[]> {
   return run.slice(0, -1).map((entry) => entry.text);
 }
 
-async function driveSession(message: ChannelMessage): Promise<void> {
+async function driveSession(
+  message: ChannelMessage,
+  agentMemberId?: string,
+): Promise<void> {
   await ensureStarted();
 
   const [project] = await db
@@ -434,7 +490,8 @@ async function driveSession(message: ChannelMessage): Promise<void> {
     organizationId: project.organizationId,
     projectId: message.projectId,
     rootMessageId: message.id,
-    runAsMemberId: message.authorMemberId,
+    agentMemberId,
+    authorMemberId: message.authorMemberId,
   });
   if (!thread) return;
 

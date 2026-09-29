@@ -118,17 +118,31 @@ async function ownedWorktree(args: {
 
   if (!row?.workspaceId) return null;
 
-  const connection = await hostConnection({
-    organizationId: args.organizationId,
-    projectId: args.projectId,
-    runAsMemberId: args.memberId,
-  });
+  const connection = await channelConnection(args);
 
   return {
     workspaceId: row.workspaceId,
     hostKey: row.hostKey ?? connection.hostKey,
     jwt: connection.jwt,
   };
+}
+
+async function channelConnection(args: {
+  organizationId: string;
+  projectId: string;
+  memberId: string;
+}) {
+  const channel = await db.query.projects.findFirst({
+    where: eq(projects.id, args.projectId),
+    columns: { defaultAgentId: true },
+  });
+  if (!channel) throw new Error("That channel no longer exists.");
+
+  return hostConnection({
+    organizationId: args.organizationId,
+    agentMemberId: channel.defaultAgentId,
+    asMemberId: args.memberId,
+  });
 }
 
 interface WorktreeRef {
@@ -171,11 +185,7 @@ export async function listChannelAgents(args: {
   projectId: string;
   memberId: string;
 }): Promise<HostAgent[]> {
-  const connection = await hostConnection({
-    organizationId: args.organizationId,
-    projectId: args.projectId,
-    runAsMemberId: args.memberId,
-  });
+  const connection = await channelConnection(args);
   return listHostAgents({
     jwt: connection.jwt,
     routingKey: connection.hostKey,

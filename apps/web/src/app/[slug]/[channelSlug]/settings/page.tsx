@@ -1,4 +1,4 @@
-import { getChannelBySlug, normalizeVisibility } from "@roster/api";
+import { getChannelBySlug, listAgents, normalizeVisibility } from "@roster/api";
 import { Button } from "@roster/ui";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
@@ -24,6 +24,12 @@ export default async function ChannelSettingsPage({
     slug: channelSlug,
   });
   if (!channel) notFound();
+
+  const agents = await listAgents({
+    organizationId: organization.id,
+    memberId: member.id,
+    role: member.role,
+  });
 
   const channelPath = `/${organization.slug}/${channel.slug}`;
 
@@ -52,11 +58,12 @@ export default async function ChannelSettingsPage({
         projectId={channel.id}
         name={channel.name}
         slug={channel.slug}
-        repo={
-          channel.repoOwner && channel.repoName
-            ? `${channel.repoOwner}/${channel.repoName}`
-            : null
-        }
+        defaultAgentId={channel.defaultAgentId}
+        agents={agents.map((agent) => ({
+          id: agent.id,
+          handle: agent.handle,
+          folderName: agent.folderName,
+        }))}
         visibility={normalizeVisibility(channel.visibility)}
         canManage={shell.can("channel:update")}
       />

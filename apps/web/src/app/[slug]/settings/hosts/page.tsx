@@ -8,18 +8,18 @@ import { SupersetConnectionSettings } from "~/components/settings/superset-conne
 export default function HostsPage() {
   return (
     <SettingsPage
-      title="Hosts & channels"
-      description="Your machines, and the projects on them that this workspace talks to."
+      title="Hosts & folders"
+      description="Your machines, and the folders on them that this workspace works in."
     >
       <SettingsSection title="Superset">
         <SupersetConnectionSettings />
       </SettingsSection>
 
       <SettingsSection
-        title="Channels"
-        description="Tick a project to add it as a channel. The ones already added are marked."
+        title="Folders"
+        description="Tick a project to add it as a folder. Each new folder arrives with an agent and a channel of its own; the ones already added are marked."
       >
-        <ChannelPicker addLabel="Add channels" />
+        <ChannelPicker addLabel="Add folders" />
       </SettingsSection>
     </SettingsPage>
   );

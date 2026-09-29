@@ -2,39 +2,26 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { hasDatabase, makeFixture } from "../test/fixtures";
 
-describe.skipIf(!hasDatabase())("agents under a channel", () => {
+describe.skipIf(!hasDatabase())("agents on a folder", () => {
   let agents: typeof import("./agents");
 
   beforeAll(async () => {
     agents = await import("./agents");
   });
 
-  it("names a new agent under the channel's own handle", async () => {
+  it("names a new agent exactly what it was asked to", async () => {
     const fixture = await makeFixture("agentname");
 
     const made = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "pm",
       brief: "Own the spec.",
     });
 
-    expect(made.handle).toBe("agentname-pm");
+    expect(made.handle).toBe("pm");
     expect(made.brief).toBe("Own the spec.");
-
-    await fixture.cleanup();
-  });
-
-  it("does not stutter when the name already carries the channel", async () => {
-    const fixture = await makeFixture("stutter");
-
-    const made = await agents.createAgent({
-      organizationId: fixture.orgId,
-      projectId: fixture.projectId,
-      name: "stutter-qa",
-    });
-
-    expect(made.handle).toBe("stutter-qa");
+    expect(made.folderId).toBe(fixture.folderId);
 
     await fixture.cleanup();
   });
@@ -44,13 +31,13 @@ describe.skipIf(!hasDatabase())("agents under a channel", () => {
 
     const first = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "pm",
       brief: "Own the spec.",
     });
     const again = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "pm",
     });
 
@@ -60,7 +47,7 @@ describe.skipIf(!hasDatabase())("agents under a channel", () => {
     await fixture.cleanup();
   });
 
-  it("refuses a name another channel already answers to", async () => {
+  it("refuses a name an agent on another folder already answers to", async () => {
     const fixture = await makeFixture("clash");
     const other = await fixture.channel("clash-other");
 
@@ -69,8 +56,8 @@ describe.skipIf(!hasDatabase())("agents under a channel", () => {
     await expect(
       agents.createAgent({
         organizationId: fixture.orgId,
-        projectId: fixture.projectId,
-        name: "pm",
+        folderId: fixture.folderId,
+        name: "clash-pm",
       }),
     ).rejects.toThrow(/taken/);
 
@@ -81,8 +68,8 @@ describe.skipIf(!hasDatabase())("agents under a channel", () => {
     const fixture = await makeFixture("resolve");
     await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
-      name: "pm",
+      folderId: fixture.folderId,
+      name: "resolve-pm",
     });
 
     const found = await agents.resolveAgent({
@@ -99,7 +86,7 @@ describe.skipIf(!hasDatabase())("agents under a channel", () => {
     const fixture = await makeFixture("archive");
     const made = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "reviewer",
     });
 
@@ -128,18 +115,18 @@ describe.skipIf(!hasDatabase())("agents under a channel", () => {
 
     const first = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "pm",
     });
     await agents.archiveAgent(first.id);
 
     const second = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "pm",
     });
 
-    expect(second.handle).toBe("freename-pm");
+    expect(second.handle).toBe("pm");
     expect(second.id).not.toBe(first.id);
 
     await fixture.cleanup();
@@ -148,12 +135,10 @@ describe.skipIf(!hasDatabase())("agents under a channel", () => {
   it("refuses to archive the agent a channel answers as", async () => {
     const fixture = await makeFixture("lastagent");
 
-    const main = await agents.mainAgentFor(fixture.projectId);
+    const main = await agents.defaultAgentFor(fixture.projectId);
     expect(main?.main).toBe(true);
 
-    await expect(agents.archiveAgent(main!.id)).rejects.toThrow(
-      /channel's own agent/,
-    );
+    await expect(agents.archiveAgent(main!.id)).rejects.toThrow(/answers #/);
 
     await fixture.cleanup();
   });
@@ -163,12 +148,12 @@ describe.skipIf(!hasDatabase())("agents under a channel", () => {
 
     const pm = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "pm",
     });
     await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "qa",
     });
 
@@ -178,7 +163,7 @@ describe.skipIf(!hasDatabase())("agents under a channel", () => {
       name: "product",
       brief: "Scope only.",
     });
-    expect(renamed.handle).toBe("rename-product");
+    expect(renamed.handle).toBe("product");
     expect(renamed.brief).toBe("Scope only.");
 
     await expect(
@@ -192,19 +177,40 @@ describe.skipIf(!hasDatabase())("agents under a channel", () => {
     await fixture.cleanup();
   });
 
+  it("moves an agent to another folder", async () => {
+    const fixture = await makeFixture("movefolder");
+    const other = await fixture.channel("movefolder-other");
+
+    const pm = await agents.createAgent({
+      organizationId: fixture.orgId,
+      folderId: fixture.folderId,
+      name: "pm",
+    });
+
+    const moved = await agents.updateAgent({
+      organizationId: fixture.orgId,
+      id: pm.id,
+      folderId: fixture.folderFor(other),
+    });
+
+    expect(moved.folderId).toBe(fixture.folderFor(other));
+
+    await fixture.cleanup();
+  });
+
   it("archives an ephemeral agent when its thread is done", async () => {
     const fixture = await makeFixture("ephem");
     const made = await fixture.thread();
 
     const scratch = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "scratch",
       ephemeral: true,
     });
     const kept = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "pm",
     });
 
@@ -234,7 +240,7 @@ describe.skipIf(!hasDatabase())("agents under a channel", () => {
 
     const reused = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "scratch",
     });
     expect(reused.handle).toBe(scratch.handle);
@@ -243,23 +249,30 @@ describe.skipIf(!hasDatabase())("agents under a channel", () => {
     await fixture.cleanup();
   });
 
-  it("gives a channel that has none an agent named for the channel", async () => {
+  it("gives a bare folder an agent named for it", async () => {
     const fixture = await makeFixture("ensure");
-    const bare = await fixture.channel("ensure-bare");
 
-    const { db, members } = await import("@roster/db");
-    const { and, eq } = await import("drizzle-orm");
-    await db
-      .delete(members)
-      .where(and(eq(members.projectId, bare), eq(members.type, "agent")));
-
-    const made = await agents.ensureChannelAgent({
+    const { randomUUID } = await import("node:crypto");
+    const { db, folders } = await import("@roster/db");
+    const folderId = randomUUID();
+    await db.insert(folders).values({
+      id: folderId,
       organizationId: fixture.orgId,
-      projectId: bare,
-      slug: "ensure-bare",
+      supersetProjectId: `superset-bare-${folderId.slice(0, 8)}`,
+      supersetHostId: "host-1",
+      supersetOrgId: fixture.orgId,
+      name: "ensure-bare",
+      ownerMemberId: fixture.memberId,
+    });
+
+    const made = await agents.ensureFolderAgent({
+      organizationId: fixture.orgId,
+      folderId,
+      handle: "ensure-bare",
     });
 
     expect(made.handle).toBe("ensure-bare");
+    expect(made.folderId).toBe(folderId);
 
     await fixture.cleanup();
   });

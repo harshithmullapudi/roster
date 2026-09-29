@@ -16,8 +16,8 @@ import { members, organizations } from "./auth";
 
 export const rosterSchema = pgSchema("roster");
 
-export const projects = rosterSchema.table(
-  "projects",
+export const folders = rosterSchema.table(
+  "folders",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     organizationId: uuid("organization_id")
@@ -29,12 +29,44 @@ export const projects = rosterSchema.table(
     supersetOrgId: uuid("superset_org_id").notNull(),
 
     name: text("name").notNull(),
-    slug: text("slug").notNull(),
 
     repoOwner: text("repo_owner"),
     repoName: text("repo_name"),
     repoUrl: text("repo_url"),
     repoPath: text("repo_path"),
+
+    ownerMemberId: uuid("owner_member_id").references(() => members.id, {
+      onDelete: "set null",
+    }),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("folders_organization_id_idx").on(table.organizationId),
+    uniqueIndex("folders_org_superset_id_idx").on(
+      table.organizationId,
+      table.supersetProjectId,
+    ),
+  ],
+);
+
+export type SelectFolder = typeof folders.$inferSelect;
+export type InsertFolder = typeof folders.$inferInsert;
+
+export const projects = rosterSchema.table(
+  "projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+
+    defaultAgentId: uuid("default_agent_id")
+      .notNull()
+      .references(() => members.id),
 
     addedByMemberId: uuid("added_by_member_id")
       .notNull()
@@ -51,11 +83,8 @@ export const projects = rosterSchema.table(
   },
   (table) => [
     index("projects_organization_id_idx").on(table.organizationId),
-    uniqueIndex("projects_org_superset_id_idx").on(
-      table.organizationId,
-      table.supersetProjectId,
-    ),
     uniqueIndex("projects_org_slug_idx").on(table.organizationId, table.slug),
+    index("projects_default_agent_idx").on(table.defaultAgentId),
   ],
 );
 

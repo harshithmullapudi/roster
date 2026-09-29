@@ -8,6 +8,7 @@ import {
   CollapsibleTrigger,
 } from "@roster/ui";
 import { ChevronDown } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { ChannelRow } from "./channel-row";
 
@@ -19,6 +20,7 @@ export interface ChannelSectionProps {
   activeChannelSlug?: string;
   attention: Set<string>;
   canManage: boolean;
+  action?: ReactNode;
   onOpenChange: (open: boolean) => void;
   onToggleStar: (channel: Channel) => void;
   onChangeVisibility: (channel: Channel, visibility: string) => void;
@@ -32,24 +34,28 @@ export function ChannelSection({
   activeChannelSlug,
   attention,
   canManage,
+  action,
   onOpenChange,
   onToggleStar,
   onChangeVisibility,
 }: ChannelSectionProps) {
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} className="mb-1">
-      <CollapsibleTrigger asChild>
-        <button className="text-muted-foreground hover:text-foreground group/section flex h-7 w-full select-none items-center gap-1 px-2 text-xs font-medium">
-          {label}
-          <ChevronDown
-            size={13}
-            className={cn(
-              "opacity-0 transition-[transform,opacity] duration-200 group-hover/section:opacity-100 max-md:opacity-100",
-              !open && "-rotate-90 opacity-100",
-            )}
-          />
-        </button>
-      </CollapsibleTrigger>
+      <div className="group/section flex h-7 w-full items-center pr-1">
+        <CollapsibleTrigger asChild>
+          <button className="text-muted-foreground hover:text-foreground flex h-full min-w-0 flex-1 select-none items-center gap-1 px-2 text-xs font-medium">
+            {label}
+            <ChevronDown
+              size={13}
+              className={cn(
+                "opacity-0 transition-[transform,opacity] duration-200 group-hover/section:opacity-100 max-md:opacity-100",
+                !open && "-rotate-90 opacity-100",
+              )}
+            />
+          </button>
+        </CollapsibleTrigger>
+        {action}
+      </div>
       <CollapsibleContent>
         <div className="flex w-full min-w-0 flex-col gap-0.5">
           {channels.map((channel) => (

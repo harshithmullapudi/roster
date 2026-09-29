@@ -1,4 +1,4 @@
-import { db, members, projects, type SelectMember } from "@roster/db";
+import { db, folders, members, projects, type SelectMember } from "@roster/db";
 import {
   decodeJwtClaims,
   encryptApiKey,
@@ -18,7 +18,7 @@ import { TRPCError } from "@trpc/server";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { slugifyProject, uniqueProjectSlug } from "../utils/project-slug";
-import { ensureChannelAgent } from "./agents";
+import { ensureFolderAgent } from "./agents";
 import { forgetSupersetCredentials } from "./sessions/connection";
 
 export interface ConnectResult {
@@ -134,8 +134,8 @@ export async function projectsForAllHosts(args: {
 
   const [hosts, existing] = await Promise.all([
     listHosts(jwt, supersetOrgId),
-    db.query.projects.findMany({
-      where: eq(projects.organizationId, args.organizationId),
+    db.query.folders.findMany({
+      where: eq(folders.organizationId, args.organizationId),
       columns: { supersetProjectId: true },
     }),
   ]);
@@ -224,51 +224,71 @@ export async function saveProjects(args: {
     });
   }
 
-  const existing = await db.query.projects.findMany({
-    where: eq(projects.organizationId, args.organizationId),
-    columns: { slug: true, supersetProjectId: true },
-  });
+  const [existingFolders, existingChannels] = await Promise.all([
+    db.query.folders.findMany({
+      where: eq(folders.organizationId, args.organizationId),
+      columns: { supersetProjectId: true },
+    }),
+    db.query.projects.findMany({
+      where: eq(projects.organizationId, args.organizationId),
+      columns: { slug: true },
+    }),
+  ]);
 
-  const taken = new Set(existing.map((row) => row.slug));
-  const alreadyAdded = new Set(existing.map((row) => row.supersetProjectId));
+  const takenSlugs = new Set(existingChannels.map((row) => row.slug));
+  const alreadyAdded = new Set(
+    existingFolders.map((row) => row.supersetProjectId),
+  );
 
-  const rows = args.selected
-    .filter((project) => !alreadyAdded.has(project.supersetProjectId))
-    .map((project) => {
-      const slug = uniqueProjectSlug(slugifyProject(project.name), taken);
-      taken.add(slug);
-      return {
+  const fresh = args.selected.filter(
+    (project) => !alreadyAdded.has(project.supersetProjectId),
+  );
+  if (fresh.length === 0) return 0;
+
+  const added = await db
+    .insert(folders)
+    .values(
+      fresh.map((project) => ({
         organizationId: args.organizationId,
         supersetProjectId: project.supersetProjectId,
         supersetHostId: project.supersetHostId,
         supersetOrgId: args.member.supersetOrgId!,
         name: project.name,
-        slug,
         repoOwner: project.repoOwner,
         repoName: project.repoName,
         repoUrl: project.repoUrl,
         repoPath: project.repoPath,
-        addedByMemberId: args.member.id,
-      };
-    });
-
-  if (rows.length === 0) return 0;
-
-  const added = await db
-    .insert(projects)
-    .values(rows)
+        ownerMemberId: args.member.id,
+      })),
+    )
     .onConflictDoNothing()
-    .returning({ id: projects.id, slug: projects.slug });
+    .returning({ id: folders.id, name: folders.name });
 
-  for (const project of added) {
-    await ensureChannelAgent({
+  // A fresh folder arrives ready to talk to: an agent living in it, and a
+  // channel that answers with that agent by default.
+  for (const folder of added) {
+    const slug = uniqueProjectSlug(slugifyProject(folder.name), takenSlugs);
+    takenSlugs.add(slug);
+
+    const agent = await ensureFolderAgent({
       organizationId: args.organizationId,
-      projectId: project.id,
-      slug: project.slug,
+      folderId: folder.id,
+      handle: slug,
     });
+
+    await db
+      .insert(projects)
+      .values({
+        organizationId: args.organizationId,
+        name: folder.name,
+        slug,
+        defaultAgentId: agent.id,
+        addedByMemberId: args.member.id,
+      })
+      .onConflictDoNothing();
   }
 
-  return rows.length;
+  return fresh.length;
 }
 
 export async function listOrgProjects(organizationId: string) {
@@ -278,17 +298,9 @@ export async function listOrgProjects(organizationId: string) {
   });
 }
 
-export async function removeProjects(args: {
-  organizationId: string;
-  projectIds: string[];
-}) {
-  if (args.projectIds.length === 0) return;
-  await db
-    .delete(projects)
-    .where(
-      and(
-        eq(projects.organizationId, args.organizationId),
-        inArray(projects.id, args.projectIds),
-      ),
-    );
+export async function listOrgFolders(organizationId: string) {
+  return db.query.folders.findMany({
+    where: eq(folders.organizationId, organizationId),
+    orderBy: folders.createdAt,
+  });
 }

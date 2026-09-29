@@ -52,6 +52,7 @@ describe.skipIf(!hasDatabase)("reading a channel and a thread from the CLI", () 
     const {
       apiKeys,
       db,
+      folders,
       members,
       messages,
       organizations,
@@ -118,22 +119,47 @@ describe.skipIf(!hasDatabase)("reading a channel and a thread from the CLI", () 
       },
     ]);
 
-    const channel = (id: string, slug: string, owner: string, visibility: string) => ({
-      id,
-      organizationId: ids.org,
-      supersetProjectId: `superset-${slug}`,
-      supersetHostId: "host-1",
-      supersetOrgId: ids.org,
-      name: slug,
-      slug,
-      visibility,
-      addedByMemberId: owner,
-    });
+    const channel = async (
+      id: string,
+      slug: string,
+      owner: string,
+      visibility: string,
+    ) => {
+      const folderId = randomUUID();
+      await db.insert(folders).values({
+        id: folderId,
+        organizationId: ids.org,
+        supersetProjectId: `superset-${slug}`,
+        supersetHostId: "host-1",
+        supersetOrgId: ids.org,
+        name: slug,
+        ownerMemberId: owner,
+      });
+      const [agent] = await db
+        .insert(members)
+        .values({
+          organizationId: ids.org,
+          userId: null,
+          role: "member",
+          type: "agent",
+          agentName: slug,
+          folderId,
+          createdAt: new Date(),
+        })
+        .returning({ id: members.id });
+      await db.insert(projects).values({
+        id,
+        organizationId: ids.org,
+        name: slug,
+        slug,
+        visibility,
+        defaultAgentId: agent!.id,
+        addedByMemberId: owner,
+      });
+    };
 
-    await db.insert(projects).values([
-      channel(ids.project, "reading", ids.member, "public"),
-      channel(ids.strangerProject, "locked", ids.stranger, "private"),
-    ]);
+    await channel(ids.project, "reading", ids.member, "public");
+    await channel(ids.strangerProject, "locked", ids.stranger, "private");
 
     let seq = 0;
     const message = async (args: {
@@ -246,6 +272,11 @@ describe.skipIf(!hasDatabase)("reading a channel and a thread from the CLI", () 
       await db.delete(threads).where(eq(threads.organizationId, ids.org));
       await db.delete(messages).where(eq(messages.organizationId, ids.org));
       await db.delete(projects).where(eq(projects.organizationId, ids.org));
+      await db
+        .update(members)
+        .set({ folderId: null })
+        .where(eq(members.organizationId, ids.org));
+      await db.delete(folders).where(eq(folders.organizationId, ids.org));
       await db.delete(members).where(eq(members.organizationId, ids.org));
       await db.delete(organizations).where(eq(organizations.id, ids.org));
       await db.delete(users).where(eq(users.id, ids.user));

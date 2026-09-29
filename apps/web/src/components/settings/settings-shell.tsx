@@ -56,7 +56,7 @@ function groupsFor(orgSlug: string): NavGroup[] {
       items: [
         {
           href: `${base}/hosts`,
-          label: "Hosts & channels",
+          label: "Hosts & folders",
           icon: <Server size={14} />,
         },
       ],
