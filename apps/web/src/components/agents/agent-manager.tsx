@@ -1,6 +1,16 @@
 "use client";
 
-import { Badge, Button, cn, Input } from "@roster/ui";
+import {
+  Badge,
+  Button,
+  cn,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@roster/ui";
 import { Check, ChevronRight, Plus, X } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 
@@ -247,21 +257,25 @@ function AgentCard({
 
       {open ? (
         <div className="mt-2 flex flex-col gap-2 pl-6">
-          <label className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">Folder</span>
-            <select
-              aria-label={`Folder for @${agent.handle}`}
-              value={agent.folderId}
-              onChange={(event) => onMove(event.target.value)}
-              className="border-border bg-background focus-visible:ring-ring rounded-md border px-2 py-1 text-sm outline-none focus-visible:ring-1"
-            >
-              {folders.map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folder.name}
-                </option>
-              ))}
-            </select>
-          </label>
+            <Select value={agent.folderId} onValueChange={onMove}>
+              <SelectTrigger
+                showIcon
+                aria-label={`Folder for @${agent.handle}`}
+                className="w-56"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {folders.map((folder) => (
+                  <SelectItem key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           <textarea
             aria-label={`Brief for @${agent.handle}`}

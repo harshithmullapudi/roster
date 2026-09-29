@@ -1,6 +1,14 @@
 "use client";
 
-import { Button, Input } from "@roster/ui";
+import {
+  Button,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@roster/ui";
 import { Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
@@ -34,7 +42,6 @@ export function NewChannelForm({ orgSlug }: { orgSlug: string }) {
             folderName: agent.folderName,
           })),
         );
-        setAgentId((current) => current || (found[0]?.id ?? ""));
       })
       .catch((cause) => {
         setError(errorMessage(cause, "Couldn't load your agents."));
@@ -102,24 +109,30 @@ export function NewChannelForm({ orgSlug }: { orgSlug: string }) {
         autoFocus
       />
 
-      <select
-        aria-label="Default agent"
-        value={agentId}
-        onChange={(event) => setAgentId(event.target.value)}
-        className="border-border bg-background focus-visible:ring-ring rounded-md border px-2 py-1.5 text-sm outline-none focus-visible:ring-1"
+      <Select
+        value={agentId || undefined}
+        onValueChange={setAgentId}
+        disabled={agents === null || agents.length === 0}
       >
-        {agents === null ? (
-          <option value="">Loading agents…</option>
-        ) : agents.length === 0 ? (
-          <option value="">No agents yet — connect a folder first</option>
-        ) : (
-          agents.map((agent) => (
-            <option key={agent.id} value={agent.id}>
+        <SelectTrigger showIcon aria-label="Default agent" className="w-full">
+          <SelectValue
+            placeholder={
+              agents === null
+                ? "Loading agents…"
+                : agents.length === 0
+                  ? "No agents yet — connect a folder first"
+                  : "Default agent"
+            }
+          />
+        </SelectTrigger>
+        <SelectContent>
+          {(agents ?? []).map((agent) => (
+            <SelectItem key={agent.id} value={agent.id}>
               @{agent.handle} — {agent.folderName}
-            </option>
-          ))
-        )}
-      </select>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       {error ? <p className="text-destructive text-xs">{error}</p> : null}
 

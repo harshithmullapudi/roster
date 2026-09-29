@@ -1,7 +1,14 @@
 "use client";
 
 import type { ChannelVisibility } from "@roster/api";
-import { cn } from "@roster/ui";
+import {
+  cn,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@roster/ui";
 import { Check, Globe, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -124,19 +131,22 @@ export function ChannelSettings({
         </p>
 
         <div className="mt-2">
-          <select
-            aria-label="Default agent"
+          <Select
             value={agentId}
             disabled={!canManage || agentPending}
-            onChange={(event) => chooseAgent(event.target.value)}
-            className="border-border bg-background focus-visible:ring-ring rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-1"
+            onValueChange={chooseAgent}
           >
-            {agents.map((agent) => (
-              <option key={agent.id} value={agent.id}>
-                @{agent.handle} — {agent.folderName}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger showIcon aria-label="Default agent" className="w-72">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {agents.map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  @{agent.handle} — {agent.folderName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {agentError ? (
