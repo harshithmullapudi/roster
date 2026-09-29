@@ -9,6 +9,7 @@ import { readCollapsed, writeCollapsed } from "~/utils/sidebar-collapse";
 import { trpc } from "~/utils/trpc";
 
 import { ChannelSection } from "./channel-section";
+import { NewChannelForm } from "./new-channel-form";
 
 export interface ChannelSectionsProps {
   groups: ChannelGroups;
@@ -114,6 +115,7 @@ export function ChannelSections({
           onChangeVisibility={changeVisibility}
         />
       ))}
+      {canManage ? <NewChannelForm orgSlug={orgSlug} /> : null}
     </div>
   );
 }

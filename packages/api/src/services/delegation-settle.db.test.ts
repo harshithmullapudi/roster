@@ -76,7 +76,7 @@ describe.skipIf(!hasDatabase())("settling a delegation", () => {
   it("posts one request message when the same ask is made twice at once", async () => {
     const fixture = await makeFixture("asktwice");
     const parent = await fixture.thread();
-    const targetChannelId = await fixture.channel("target");
+    await fixture.channel("target");
 
     const { delegate } = await import("./delegations");
     const ask = () =>
@@ -100,7 +100,7 @@ describe.skipIf(!hasDatabase())("settling a delegation", () => {
       .from(messages)
       .where(
         and(
-          eq(messages.projectId, targetChannelId),
+          eq(messages.projectId, fixture.projectId),
           eq(messages.kind, "delegation"),
         ),
       );

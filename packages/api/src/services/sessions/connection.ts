@@ -1,9 +1,9 @@
 import {
   db,
+  folders,
   members,
-  projects,
+  type SelectFolder,
   type SelectMember,
-  type SelectProject,
 } from "@roster/db";
 import { mintJwt, routingKey, tryDecryptApiKey } from "@roster/superset";
 import { and, eq } from "drizzle-orm";
@@ -21,7 +21,7 @@ export function forgetSupersetCredentials(): void {
 
 export interface HostConnection {
   jwt: string;
-  project: SelectProject;
+  folder: SelectFolder;
   hostKey: string;
   memberId: string;
 }
@@ -35,7 +35,7 @@ export const NOT_CONNECTED =
 export const UNREADABLE_KEY =
   "Your stored Superset key can no longer be read. Reconnect Superset in settings.";
 export const OTHER_ORG =
-  "Your Superset connection is to a different organization than this channel's machine. Switch it in settings.";
+  "Your Superset connection is to a different organization than this folder's machine. Switch it in settings.";
 
 export type MemberKey = { apiKey: string } | { apiKey: null; problem: string };
 
@@ -61,33 +61,44 @@ export function memberKey(
 
 export async function hostConnection(args: {
   organizationId: string;
-  projectId: string;
-  runAsMemberId: string | null;
+  agentMemberId: string;
+  asMemberId?: string | null;
   supersetHostKey?: string | null;
 }): Promise<HostConnection> {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, args.projectId),
+  const agent = await db.query.members.findFirst({
+    where: and(
+      eq(members.id, args.agentMemberId),
+      eq(members.organizationId, args.organizationId),
+    ),
   });
-  if (!project) throw new Error("This channel is no longer linked to a project.");
+  if (!agent?.folderId) {
+    throw new Error("This agent is no longer linked to a folder.");
+  }
 
-  const member = args.runAsMemberId
-    ? await db.query.members.findFirst({
-        where: and(
-          eq(members.id, args.runAsMemberId),
-          eq(members.organizationId, args.organizationId),
-        ),
-      })
-    : null;
+  const folder = await db.query.folders.findFirst({
+    where: eq(folders.id, agent.folderId),
+  });
+  if (!folder) throw new Error("This agent is no longer linked to a folder.");
 
-  const key = memberKey(member, project.supersetOrgId);
+  const keyHolderId = args.asMemberId ?? folder.ownerMemberId;
+  if (!keyHolderId) throw new Error(NO_MEMBER);
+
+  const member = await db.query.members.findFirst({
+    where: and(
+      eq(members.id, keyHolderId),
+      eq(members.organizationId, args.organizationId),
+    ),
+  });
+
+  const key = memberKey(member, folder.supersetOrgId);
   if (key.apiKey === null) throw new Error(key.problem);
 
   return {
     jwt: await jwts.get(key.apiKey),
-    project,
+    folder,
     hostKey:
       args.supersetHostKey ??
-      routingKey(project.supersetOrgId, project.supersetHostId),
+      routingKey(folder.supersetOrgId, folder.supersetHostId),
     memberId: member!.id,
   };
 }

@@ -122,7 +122,7 @@ export const members = authSchema.table(
 
     type: text("type").$type<MemberType>().default("human").notNull(),
     agentName: text("agent_name"),
-    projectId: uuid("project_id"),
+    folderId: uuid("folder_id"),
     brief: text("brief"),
     ephemeral: boolean("ephemeral").default(false).notNull(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -139,7 +139,7 @@ export const members = authSchema.table(
       table.organizationId,
       table.agentName,
     ),
-    index("members_project_idx").on(table.projectId),
+    index("members_folder_idx").on(table.folderId),
   ],
 );
 

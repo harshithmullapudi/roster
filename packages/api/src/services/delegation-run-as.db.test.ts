@@ -78,45 +78,63 @@ async function addChannelOwnedBy(args: {
   orgId: string;
   slug: string;
   memberId: string;
-}): Promise<string> {
-  const { db, members, projects } = await import("@roster/db");
+}): Promise<{ channelId: string; agentId: string; folderId: string }> {
+  const { db, folders, members, projects } = await import("@roster/db");
 
-  const id = randomUUID();
-  await db.insert(projects).values({
-    id,
+  const channelId = randomUUID();
+  const folderId = randomUUID();
+  await db.insert(folders).values({
+    id: folderId,
     organizationId: args.orgId,
-    supersetProjectId: `superset-${args.slug}-${id.slice(0, 8)}`,
+    supersetProjectId: `superset-${args.slug}-${channelId.slice(0, 8)}`,
     supersetHostId: "host-2",
     supersetOrgId: args.orgId,
     name: args.slug,
+    ownerMemberId: args.memberId,
+  });
+
+  const [agent] = await db
+    .insert(members)
+    .values({
+      organizationId: args.orgId,
+      userId: null,
+      role: "member",
+      type: "agent",
+      agentName: args.slug,
+      folderId,
+      createdAt: new Date(),
+    })
+    .returning({ id: members.id });
+
+  await db.insert(projects).values({
+    id: channelId,
+    organizationId: args.orgId,
+    name: args.slug,
     slug: args.slug,
+    defaultAgentId: agent!.id,
     addedByMemberId: args.memberId,
   });
 
-  await db.insert(members).values({
-    organizationId: args.orgId,
-    userId: null,
-    role: "member",
-    type: "agent",
-    agentName: args.slug,
-    projectId: id,
-    createdAt: new Date(),
-  });
-
-  return id;
+  return { channelId, agentId: agent!.id, folderId };
 }
 
-async function sessionOf(threadId: string) {
+async function sessionOf(threadId: string, agentMemberId: string) {
   const { db, threadSessions } = await import("@roster/db");
-  const { eq } = await import("drizzle-orm");
+  const { and, eq } = await import("drizzle-orm");
   const [row] = await db
     .select({
       status: threadSessions.status,
       runAsMemberId: threadSessions.runAsMemberId,
       error: threadSessions.error,
+      supersetWorkspaceId: threadSessions.supersetWorkspaceId,
     })
     .from(threadSessions)
-    .where(eq(threadSessions.threadId, threadId));
+    .where(
+      and(
+        eq(threadSessions.threadId, threadId),
+        eq(threadSessions.agentMemberId, agentMemberId),
+      ),
+    );
   return row;
 }
 
@@ -131,13 +149,13 @@ async function agentRepliesIn(threadId: string): Promise<string[]> {
 }
 
 describe.skipIf(!hasDatabase())("a delegated run", () => {
-  it("runs as the member whose machine the answering channel lives on", async () => {
+  it("runs as the member who owns the answering agent's folder", async () => {
     const fixture = await makeFixture("runas");
     await connectSuperset(fixture.memberId, fixture.orgId);
 
     const owner = await addTeammate(fixture.orgId);
     await connectSuperset(owner.memberId, fixture.orgId);
-    await addChannelOwnedBy({
+    const target = await addChannelOwnedBy({
       orgId: fixture.orgId,
       slug: "target",
       memberId: owner.memberId,
@@ -155,26 +173,30 @@ describe.skipIf(!hasDatabase())("a delegated run", () => {
       task: "look at the logs",
     });
 
-    const child = await sessionOf(result.childThreadId!);
+    expect(result.childThreadId).toBeNull();
+    expect(result.sameWorktree).toBe(false);
+
+    const child = await sessionOf(parent.threadId, target.agentId);
 
     expect(child?.runAsMemberId).toBe(owner.memberId);
     expect(child?.error).toBeNull();
     expect(child?.status).toBe("running");
 
-    expect(await sessionOf(parent.threadId)).toMatchObject({
+    expect(await sessionOf(parent.threadId, fixture.agentFor())).toMatchObject({
       status: "waiting",
     });
 
     const { settleDelegationFor } = await import("./delegations");
     await settleDelegationFor({
-      threadId: result.childThreadId!,
+      threadId: parent.threadId,
+      agentMemberId: target.agentId,
       reply: "the logs say the disk filled up",
     });
 
     expect(await agentRepliesIn(parent.threadId)).toEqual([
       "the logs say the disk filled up",
     ]);
-    expect(await sessionOf(parent.threadId)).toMatchObject({
+    expect(await sessionOf(parent.threadId, fixture.agentFor())).toMatchObject({
       status: "running",
       error: null,
     });

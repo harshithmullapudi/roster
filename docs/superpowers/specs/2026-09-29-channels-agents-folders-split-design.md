@@ -108,7 +108,11 @@ and throws away *which* agent was named — `@foo-pm` in chat starts
   agent per thread, `roster.ts:315-318`).
 
 `roster ask` keeps its guards (depth 3, cycle detection, one open
-delegation) and drops only its routing predicate — see next section.
+delegation) and loses its child threads: with worktrees keyed to folders
+inside the thread, a cross-folder ask no longer needs a root message in a
+foreign channel. Every delegation joins the parent thread — the request
+message, the target's session, and the reply all live there, and
+`delegations.child_thread_id` stays null for new rows.
 
 ## Sessions and worktrees
 

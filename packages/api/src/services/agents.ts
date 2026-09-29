@@ -1,88 +1,93 @@
 import {
   db,
+  folders,
   members,
   projects,
+  type SelectFolder,
   type SelectMember,
   threadSessions,
 } from "@roster/db";
 import { TRPCError } from "@trpc/server";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
-import { channelAgentHandle, normalizeHandle } from "../lib/agent-identity";
+import { normalizeHandle } from "../lib/agent-identity";
 import type { ChannelScope } from "./channels";
 
 export interface Agent {
   id: string;
+  organizationId: string;
   handle: string;
   brief: string | null;
-  projectId: string;
-  channelSlug: string;
-  channelName: string;
+  folderId: string;
+  folderName: string;
+  repoName: string | null;
   main: boolean;
   ephemeral: boolean;
 }
 
+const IS_DEFAULT_SOMEWHERE = sql<boolean>`exists (
+  select 1 from "roster"."projects" p
+   where p."default_agent_id" = ${members.id})`;
+
 const agentColumns = {
   id: members.id,
+  organizationId: members.organizationId,
   handle: members.agentName,
   brief: members.brief,
-  projectId: members.projectId,
-  channelSlug: projects.slug,
-  channelName: projects.name,
-  archivedAt: members.archivedAt,
+  folderId: members.folderId,
+  folderName: folders.name,
+  repoName: folders.repoName,
+  main: IS_DEFAULT_SOMEWHERE,
   createdAt: members.createdAt,
   ephemeral: members.ephemeral,
 };
 
 type AgentRow = {
   id: string;
+  organizationId: string;
   handle: string | null;
   brief: string | null;
-  projectId: string | null;
-  channelSlug: string | null;
-  channelName: string | null;
+  folderId: string | null;
+  folderName: string | null;
+  repoName: string | null;
+  main: boolean;
   createdAt: Date;
   ephemeral: boolean;
 };
 
-function toAgent(row: AgentRow, main = false): Agent {
+function toAgent(row: AgentRow): Agent {
   return {
     id: row.id,
+    organizationId: row.organizationId,
     handle: row.handle ?? "agent",
     brief: row.brief,
-    projectId: row.projectId ?? "",
-    channelSlug: row.channelSlug ?? "",
-    channelName: row.channelName ?? "",
-    main,
+    folderId: row.folderId ?? "",
+    folderName: row.folderName ?? "",
+    repoName: row.repoName,
+    main: row.main,
     ephemeral: row.ephemeral,
   };
 }
 
 export async function listAgents(
   scope: ChannelScope,
-  filter?: { projectId?: string },
+  filter?: { folderId?: string },
 ): Promise<Agent[]> {
   const rows = await db
     .select(agentColumns)
     .from(members)
-    .innerJoin(projects, eq(members.projectId, projects.id))
+    .innerJoin(folders, eq(members.folderId, folders.id))
     .where(
       and(
         eq(members.organizationId, scope.organizationId),
         eq(members.type, "agent"),
         isNull(members.archivedAt),
-        filter?.projectId ? eq(members.projectId, filter.projectId) : undefined,
+        filter?.folderId ? eq(members.folderId, filter.folderId) : undefined,
       ),
     )
-    .orderBy(asc(projects.slug), asc(members.createdAt));
+    .orderBy(asc(members.agentName), asc(members.createdAt));
 
-  const oldest = new Map<string, string>();
-  for (const row of rows) {
-    const key = row.projectId ?? "";
-    if (!oldest.has(key)) oldest.set(key, row.id);
-  }
-
-  return rows.map((row) => toAgent(row, oldest.get(row.projectId ?? "") === row.id));
+  return rows.map((row) => toAgent(row));
 }
 
 export async function resolveAgent(args: {
@@ -95,7 +100,7 @@ export async function resolveAgent(args: {
   const [row] = await db
     .select(agentColumns)
     .from(members)
-    .innerJoin(projects, eq(members.projectId, projects.id))
+    .innerJoin(folders, eq(members.folderId, folders.id))
     .where(
       and(
         eq(members.organizationId, args.organizationId),
@@ -113,54 +118,47 @@ export async function agentById(id: string): Promise<Agent | null> {
   const [row] = await db
     .select(agentColumns)
     .from(members)
-    .innerJoin(projects, eq(members.projectId, projects.id))
+    .innerJoin(folders, eq(members.folderId, folders.id))
     .where(and(eq(members.id, id), eq(members.type, "agent")))
     .limit(1);
 
   return row ? toAgent(row) : null;
 }
 
-export async function mainAgentFor(projectId: string): Promise<Agent | null> {
-  const [row] = await db
-    .select(agentColumns)
-    .from(members)
-    .innerJoin(projects, eq(members.projectId, projects.id))
-    .where(
-      and(
-        eq(members.projectId, projectId),
-        eq(members.type, "agent"),
-        isNull(members.archivedAt),
-      ),
-    )
-    .orderBy(asc(members.createdAt))
+export async function defaultAgentFor(projectId: string): Promise<Agent | null> {
+  const [channel] = await db
+    .select({ defaultAgentId: projects.defaultAgentId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
     .limit(1);
+  if (!channel) return null;
 
-  return row ? toAgent(row, true) : null;
+  return agentById(channel.defaultAgentId);
 }
 
 const HANDLE_SHAPE = /^[a-z0-9][a-z0-9-]*$/;
 
-export function agentHandleFor(channelHandle: string, name: string): string {
-  const role = normalizeHandle(name);
-  return role.startsWith(`${channelHandle}-`) ? role : `${channelHandle}-${role}`;
-}
-
 export async function createAgent(args: {
   organizationId: string;
-  projectId: string;
+  folderId: string;
   name: string;
   brief?: string | null;
   ephemeral?: boolean;
 }): Promise<Agent> {
-  const main = await mainAgentFor(args.projectId);
-  if (!main) {
+  const folder = await db.query.folders.findFirst({
+    where: and(
+      eq(folders.id, args.folderId),
+      eq(folders.organizationId, args.organizationId),
+    ),
+  });
+  if (!folder) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "That channel has no agent of its own to sit under.",
+      message: "That folder is not one of this workspace's.",
     });
   }
 
-  const handle = agentHandleFor(main.handle, args.name);
+  const handle = normalizeHandle(args.name);
   if (!HANDLE_SHAPE.test(handle)) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -174,7 +172,7 @@ export async function createAgent(args: {
     handle,
   });
   if (existing) {
-    if (existing.projectId !== args.projectId) {
+    if (existing.folderId !== args.folderId) {
       throw new TRPCError({
         code: "CONFLICT",
         message: `"@${handle}" is taken in this workspace. Pick another name.`,
@@ -191,7 +189,7 @@ export async function createAgent(args: {
       role: "member",
       type: "agent",
       agentName: handle,
-      projectId: args.projectId,
+      folderId: args.folderId,
       brief: args.brief ?? null,
       ephemeral: Boolean(args.ephemeral),
     })
@@ -218,16 +216,21 @@ export async function createAgent(args: {
   return agent;
 }
 
+async function channelDefaultingTo(agentId: string) {
+  return db.query.projects.findFirst({
+    where: eq(projects.defaultAgentId, agentId),
+  });
+}
+
 export async function archiveAgent(id: string): Promise<void> {
   const agent = await agentById(id);
   if (!agent) return;
 
-  const main = await mainAgentFor(agent.projectId);
-  if (main?.id === agent.id) {
+  const channel = await channelDefaultingTo(agent.id);
+  if (channel) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message:
-        "That is the channel's own agent — archiving it would leave nobody to answer there.",
+      message: `That agent answers #${channel.slug} — give the channel another default agent first.`,
     });
   }
 
@@ -257,22 +260,36 @@ export async function updateAgent(args: {
   id: string;
   name?: string;
   brief?: string | null;
+  folderId?: string;
 }): Promise<Agent> {
   const agent = await agentById(args.id);
   if (!agent) {
     throw new TRPCError({ code: "NOT_FOUND", message: "No such agent." });
   }
 
-  const patch: { agentName?: string; brief?: string | null } = {};
+  const patch: { agentName?: string; brief?: string | null; folderId?: string } =
+    {};
 
   if (args.brief !== undefined) patch.brief = args.brief;
 
+  if (args.folderId !== undefined && args.folderId !== agent.folderId) {
+    const folder = await db.query.folders.findFirst({
+      where: and(
+        eq(folders.id, args.folderId),
+        eq(folders.organizationId, args.organizationId),
+      ),
+    });
+    if (!folder) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "That folder is not one of this workspace's.",
+      });
+    }
+    patch.folderId = args.folderId;
+  }
+
   if (args.name !== undefined) {
-    const main = await mainAgentFor(agent.projectId);
-    const handle =
-      main && main.id !== agent.id
-        ? agentHandleFor(main.handle, args.name)
-        : channelAgentHandle(args.name);
+    const handle = normalizeHandle(args.name);
 
     if (!HANDLE_SHAPE.test(handle)) {
       throw new TRPCError({
@@ -345,41 +362,41 @@ export async function agentMemberRow(
   return db.query.members.findFirst({ where: eq(members.id, id) });
 }
 
-export async function ensureChannelAgent(args: {
-  organizationId: string;
-  projectId: string;
-  slug: string;
-}): Promise<Agent> {
-  const existing = await mainAgentFor(args.projectId);
-  if (existing) return existing;
+export async function agentFolder(
+  agentMemberId: string,
+): Promise<SelectFolder | null> {
+  const agent = await db.query.members.findFirst({
+    where: eq(members.id, agentMemberId),
+    columns: { folderId: true },
+  });
+  if (!agent?.folderId) return null;
 
-  const base = channelAgentHandle(args.slug);
+  const folder = await db.query.folders.findFirst({
+    where: eq(folders.id, agent.folderId),
+  });
+  return folder ?? null;
+}
+
+export async function ensureFolderAgent(args: {
+  organizationId: string;
+  folderId: string;
+  handle: string;
+}): Promise<Agent> {
+  const base = normalizeHandle(args.handle) || "agent";
 
   const taken = await resolveAgent({
     organizationId: args.organizationId,
     handle: base,
   });
+  if (taken && taken.folderId === args.folderId) return taken;
+
   const handle = taken
-    ? `${base}-${args.projectId.replace(/-/g, "").slice(0, 4)}`
+    ? `${base}-${args.folderId.replace(/-/g, "").slice(0, 4)}`
     : base;
 
-  const [row] = await db
-    .insert(members)
-    .values({
-      organizationId: args.organizationId,
-      userId: null,
-      role: "member",
-      type: "agent",
-      agentName: handle,
-      projectId: args.projectId,
-    })
-    .onConflictDoNothing({
-      target: [members.organizationId, members.agentName],
-    })
-    .returning();
-
-  const agent = row ? await agentById(row.id) : await mainAgentFor(args.projectId);
-  if (!agent) throw new Error(`Could not give #${args.slug} an agent.`);
-
-  return agent;
+  return createAgent({
+    organizationId: args.organizationId,
+    folderId: args.folderId,
+    name: handle,
+  });
 }

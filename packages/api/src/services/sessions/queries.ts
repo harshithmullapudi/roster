@@ -235,7 +235,8 @@ async function waitingOnByParent(
     })
     .from(delegations)
     .innerJoin(members, eq(delegations.targetMemberId, members.id))
-    .innerJoin(projects, eq(members.projectId, projects.id))
+    .innerJoin(threads, eq(delegations.parentThreadId, threads.id))
+    .innerJoin(projects, eq(threads.projectId, projects.id))
     .where(
       and(
         inArray(delegations.parentThreadId, parentThreadIds),

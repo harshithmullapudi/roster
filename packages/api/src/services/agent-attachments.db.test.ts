@@ -7,7 +7,8 @@ runSessionsInThisProcess();
 const prompts: string[] = [];
 const steers: string[] = [];
 
-vi.mock("@roster/superset", () => ({
+vi.mock("@roster/superset", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@roster/superset")>()),
   createWorkspace: vi.fn(async () => ({ id: "workspace-1" })),
   runAgent: vi.fn(async (args: { prompt: string }) => {
     prompts.push(args.prompt);
@@ -33,7 +34,7 @@ vi.mock("./sessions/connection", () => ({
     jwt: "jwt",
     hostKey: "host-1",
     memberId: "member-1",
-    project: { supersetProjectId: "superset-project" },
+    folder: { supersetProjectId: "superset-project" },
   })),
   jwtForMember: vi.fn(async () => ({ jwt: "jwt" })),
 }));
@@ -75,7 +76,7 @@ describe.skipIf(!hasDatabase)("what an agent session is told about files", () =>
 
   beforeAll(async () => {
     const { randomUUID } = await import("node:crypto");
-    const { db, members, messages, organizations, projects, users } =
+    const { db, folders, members, messages, organizations, projects, users } =
       await import("@roster/db");
     const { eq } = await import("drizzle-orm");
     const { sendMessage, threadIdForMessage } = await import("./messages");
@@ -107,24 +108,35 @@ describe.skipIf(!hasDatabase)("what an agent session is told about files", () =>
       role: "owner",
       createdAt: new Date(),
     });
-    await db.insert(projects).values({
-      id: ids.project,
+    const folderId = randomUUID();
+    await db.insert(folders).values({
+      id: folderId,
       organizationId: ids.org,
       supersetProjectId: "superset-project",
       supersetHostId: "host-1",
       supersetOrgId: ids.org,
       name: "brief",
-      slug: "brief",
-      addedByMemberId: ids.member,
+      ownerMemberId: ids.member,
     });
-    await db.insert(members).values({
+    const [agent] = await db
+      .insert(members)
+      .values({
+        organizationId: ids.org,
+        userId: null,
+        role: "member",
+        type: "agent",
+        agentName: "agent-brief",
+        folderId,
+        createdAt: new Date(),
+      })
+      .returning({ id: members.id });
+    await db.insert(projects).values({
+      id: ids.project,
       organizationId: ids.org,
-      userId: null,
-      role: "member",
-      type: "agent",
-      agentName: "agent-brief",
-      projectId: ids.project,
-      createdAt: new Date(),
+      name: "brief",
+      slug: "brief",
+      defaultAgentId: agent!.id,
+      addedByMemberId: ids.member,
     });
 
     const uploaded = await uploadAttachment({
@@ -143,6 +155,11 @@ describe.skipIf(!hasDatabase)("what an agent session is told about files", () =>
       cleanup: async () => {
         await db.delete(messages).where(eq(messages.organizationId, ids.org));
         await db.delete(projects).where(eq(projects.id, ids.project));
+        await db
+          .update(members)
+          .set({ folderId: null })
+          .where(eq(members.organizationId, ids.org));
+        await db.delete(folders).where(eq(folders.organizationId, ids.org));
         await db.delete(members).where(eq(members.organizationId, ids.org));
         await db.delete(organizations).where(eq(organizations.id, ids.org));
         await db.delete(users).where(eq(users.id, ids.user));

@@ -48,7 +48,7 @@ vi.mock("../services/sessions/connection", async (importOriginal) => {
       jwt: "jwt",
       hostKey: "host-1",
       memberId: "member-1",
-      project: { supersetProjectId: "superset-project" },
+      folder: { supersetProjectId: "superset-project" },
     })),
     jwtForMember: vi.fn(async () => ({ jwt: "jwt" })),
   };

@@ -51,8 +51,9 @@ import {
 } from "../attachments";
 import {
   agentById,
+  agentFolder,
   archiveEphemeralAgentsFor,
-  mainAgentFor,
+  defaultAgentFor,
 } from "../agents";
 import { allocateSeq } from "../channels";
 import { channelName, publish, threadChannelName } from "../centrifugo";
@@ -1190,9 +1191,10 @@ export async function joinThread(args: {
 }): Promise<boolean> {
   await ensureStarted();
 
-  const host = await askingSession(args.threadId);
-  if (!host?.supersetWorkspaceId || !host.supersetHostKey) return false;
-  if (host.workspaceReapedAt) return false;
+  const folder = await agentFolder(args.agentMemberId);
+  if (!folder) return false;
+
+  const lender = await worktreeLender(args.threadId, folder.id);
 
   const existing = await sessionForAgent(args.threadId, args.agentMemberId);
   const session =
@@ -1205,7 +1207,7 @@ export async function joinThread(args: {
           projectId: args.projectId,
           agentMemberId: args.agentMemberId,
           role: "delegate",
-          runAsMemberId: host.runAsMemberId,
+          runAsMemberId: folder.ownerMemberId,
           status: "starting",
         })
         .onConflictDoNothing({
@@ -1226,13 +1228,37 @@ export async function joinThread(args: {
     session,
     text: args.text,
     delegation: args.delegation,
-    shareWorkspace: {
-      workspaceId: host.supersetWorkspaceId,
-      hostKey: host.supersetHostKey,
-    },
+    shareWorkspace: lender ?? undefined,
   });
 
   return true;
+}
+
+/**
+ * An agent entering a thread borrows the worktree of an agent already working
+ * there — but only when both live in the same folder. Anything else gets a
+ * fresh worktree of its own.
+ */
+async function worktreeLender(
+  threadId: string,
+  folderId: string,
+): Promise<{ workspaceId: string; hostKey: string } | null> {
+  const candidates = await sessionsOf(threadId);
+
+  for (const candidate of candidates) {
+    if (!candidate.supersetWorkspaceId || !candidate.supersetHostKey) continue;
+    if (candidate.workspaceReapedAt) continue;
+
+    const lenderFolder = await agentFolder(candidate.agentMemberId);
+    if (lenderFolder?.id !== folderId) continue;
+
+    return {
+      workspaceId: candidate.supersetWorkspaceId,
+      hostKey: candidate.supersetHostKey,
+    };
+  }
+
+  return null;
 }
 
 async function startSessionRow(args: {
@@ -1254,7 +1280,7 @@ async function startSessionRow(args: {
       : await createWorkspace({
           jwt: connection.jwt,
           routingKey: connection.hostKey,
-          projectId: connection.project.supersetProjectId,
+          projectId: connection.folder.supersetProjectId,
           namingPrompt: args.text,
         });
     const hostKey = args.shareWorkspace?.hostKey ?? connection.hostKey;
@@ -1892,14 +1918,16 @@ export async function createThread(args: {
   organizationId: string;
   projectId: string;
   rootMessageId: string;
-  runAsMemberId?: string | null;
+  authorMemberId?: string | null;
   agentMemberId?: string;
 }): Promise<SelectThread | null> {
   const agentMemberId =
-    args.agentMemberId ?? (await mainAgentFor(args.projectId))?.id;
+    args.agentMemberId ?? (await defaultAgentFor(args.projectId))?.id;
   if (!agentMemberId) {
-    throw new Error("That channel has no agent to open a thread with.");
+    throw new Error("That channel has no default agent to open a thread with.");
   }
+
+  const folder = await agentFolder(agentMemberId);
 
   const [row] = await db
     .insert(threads)
@@ -1920,7 +1948,7 @@ export async function createThread(args: {
       projectId: args.projectId,
       agentMemberId,
       role: "main",
-      runAsMemberId: args.runAsMemberId ?? null,
+      runAsMemberId: folder?.ownerMemberId ?? null,
       status: "starting",
     })
     .onConflictDoNothing({
@@ -1934,7 +1962,7 @@ export async function createThread(args: {
 
   await subscribeThreadAuthor({
     threadId: row.id,
-    memberId: args.runAsMemberId,
+    memberId: args.authorMemberId,
   });
 
   await publishThread(row.id);

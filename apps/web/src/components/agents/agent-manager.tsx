@@ -10,38 +10,36 @@ export interface AgentRow {
   id: string;
   handle: string;
   brief: string | null;
-  projectId: string;
-  channelSlug: string;
+  folderId: string;
+  folderName: string;
   main: boolean;
 }
 
-export interface ChannelOption {
+export interface FolderOption {
   id: string;
-  slug: string;
+  name: string;
 }
 
 export interface AgentManagerProps {
   agents: AgentRow[];
-  channels: ChannelOption[];
+  folders: FolderOption[];
 }
 
-export function AgentManager({ agents, channels }: AgentManagerProps) {
+export function AgentManager({ agents, folders }: AgentManagerProps) {
   const [rows, setRows] = useState(agents);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
 
-  const byChannel = useMemo(() => {
+  const byFolder = useMemo(() => {
     const grouped = new Map<string, AgentRow[]>();
     for (const agent of rows) {
-      grouped.set(agent.projectId, [
-        ...(grouped.get(agent.projectId) ?? []),
+      grouped.set(agent.folderId, [
+        ...(grouped.get(agent.folderId) ?? []),
         agent,
       ]);
     }
     return grouped;
   }, [rows]);
-
-  const listed = channels.filter((channel) => byChannel.has(channel.id));
 
   async function created(agent: AgentRow) {
     setRows((current) =>
@@ -62,60 +60,90 @@ export function AgentManager({ agents, channels }: AgentManagerProps) {
     }
   }
 
+  async function moved(agent: AgentRow, folderId: string) {
+    setError(null);
+    const folder = folders.find((row) => row.id === folderId);
+    if (!folder || agent.folderId === folderId) return;
+
+    const previous = rows;
+    setRows((current) =>
+      current.map((row) =>
+        row.id === agent.id
+          ? { ...row, folderId, folderName: folder.name }
+          : row,
+      ),
+    );
+    try {
+      await trpc.agents.update.mutate({ agentId: agent.id, folderId });
+    } catch (cause) {
+      setRows(previous);
+      setError(errorMessage(cause, "Couldn't move that agent."));
+    }
+  }
+
   return (
     <section className="flex flex-col gap-6">
       <div>
         <h2 className="text-foreground text-base font-medium">Agents</h2>
         <p className="text-muted-foreground text-sm">
-          Each channel answers as an agent. Give a channel more of them — a PM,
-          a reviewer — and they work in the same worktree, taking turns. Anyone
-          can reach one with <code className="font-mono">@handle</code>, and an
-          agent can hand work to another with{" "}
+          Every agent works in one folder. Agents on the same folder share a
+          worktree when they end up in the same thread; anyone can reach one
+          with <code className="font-mono">@handle</code>, and an agent can
+          hand work to another with{" "}
           <code className="font-mono">roster ask</code>.
         </p>
       </div>
 
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
 
-      {listed.length === 0 ? (
+      {folders.length === 0 ? (
         <p className="text-muted-foreground text-sm">
-          No channels yet. Connect a folder and its agent appears here.
+          No folders yet. Connect one under Hosts &amp; folders and its agent
+          appears here.
         </p>
       ) : null}
 
-      {listed.map((channel) => {
-        const theirs = byChannel.get(channel.id) ?? [];
+      {folders.map((folder) => {
+        const theirs = byFolder.get(folder.id) ?? [];
 
         return (
-          <div key={channel.id} className="flex flex-col gap-2">
+          <div key={folder.id} className="flex flex-col gap-2">
             <div className="flex items-end justify-between gap-3">
-              <h3 className="text-sm font-medium">#{channel.slug}</h3>
+              <h3 className="text-sm font-medium">{folder.name}</h3>
               <Button
                 variant="ghost"
                 size="sm"
                 className="gap-1"
                 onClick={() =>
-                  setAdding(adding === channel.id ? null : channel.id)
+                  setAdding(adding === folder.id ? null : folder.id)
                 }
               >
-                {adding === channel.id ? <X size={14} /> : <Plus size={14} />}
-                {adding === channel.id ? "Cancel" : "Add agent"}
+                {adding === folder.id ? <X size={14} /> : <Plus size={14} />}
+                {adding === folder.id ? "Cancel" : "Add agent"}
               </Button>
             </div>
 
-            <ul className="bg-background-3 flex flex-col divide-y rounded-lg">
-              {theirs.map((agent) => (
-                <AgentCard
-                  key={agent.id}
-                  agent={agent}
-                  onArchive={() => archive(agent)}
-                />
-              ))}
-            </ul>
+            {theirs.length > 0 ? (
+              <ul className="bg-background-3 flex flex-col divide-y rounded-lg">
+                {theirs.map((agent) => (
+                  <AgentCard
+                    key={agent.id}
+                    agent={agent}
+                    folders={folders}
+                    onArchive={() => archive(agent)}
+                    onMove={(folderId) => moved(agent, folderId)}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                Nobody works in this folder yet.
+              </p>
+            )}
 
-            {adding === channel.id ? (
+            {adding === folder.id ? (
               <NewAgentForm
-                channelId={channel.id}
+                folderId={folder.id}
                 onCreated={created}
                 onError={setError}
               />
@@ -129,10 +157,14 @@ export function AgentManager({ agents, channels }: AgentManagerProps) {
 
 function AgentCard({
   agent,
+  folders,
   onArchive,
+  onMove,
 }: {
   agent: AgentRow;
+  folders: FolderOption[];
   onArchive: () => void;
+  onMove: (folderId: string) => void;
 }) {
   const [brief, setBrief] = useState(agent.brief ?? "");
   const [saved, setSaved] = useState(agent.brief ?? "");
@@ -185,7 +217,7 @@ function AgentCard({
           </code>
           {agent.main ? (
             <Badge variant="secondary" className="shrink-0">
-              channel
+              default
             </Badge>
           ) : null}
           {!open ? (
@@ -215,6 +247,22 @@ function AgentCard({
 
       {open ? (
         <div className="mt-2 flex flex-col gap-2 pl-6">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Folder</span>
+            <select
+              aria-label={`Folder for @${agent.handle}`}
+              value={agent.folderId}
+              onChange={(event) => onMove(event.target.value)}
+              className="border-border bg-background focus-visible:ring-ring rounded-md border px-2 py-1 text-sm outline-none focus-visible:ring-1"
+            >
+              {folders.map((folder) => (
+                <option key={folder.id} value={folder.id}>
+                  {folder.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <textarea
             aria-label={`Brief for @${agent.handle}`}
             value={brief}
@@ -223,11 +271,7 @@ function AgentCard({
               setJustSaved(false);
             }}
             rows={4}
-            placeholder={
-              agent.main
-                ? "Anything every session on this channel should know."
-                : "What this one is here to do. It is read at the top of every session."
-            }
+            placeholder="What this one is here to do. It is read at the top of every session."
             className="border-border bg-background focus-visible:ring-ring min-h-20 w-full resize-y rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-1"
           />
 
@@ -255,11 +299,11 @@ function AgentCard({
 }
 
 function NewAgentForm({
-  channelId,
+  folderId,
   onCreated,
   onError,
 }: {
-  channelId: string;
+  folderId: string;
   onCreated: (agent: AgentRow) => void;
   onError: (message: string | null) => void;
 }) {
@@ -275,7 +319,7 @@ function NewAgentForm({
     onError(null);
     try {
       const made = await trpc.agents.create.mutate({
-        channelId,
+        folderId,
         name: name.trim(),
         brief: brief.trim() || undefined,
       });
@@ -302,9 +346,9 @@ function NewAgentForm({
         aria-label="Agent name"
       />
       <p className="text-muted-foreground text-xs">
-        The name is suffixed to the channel's own handle, so{" "}
-        <code className="font-mono">pm</code> becomes{" "}
-        <code className="font-mono">@&lt;channel-agent&gt;-pm</code>.
+        Lowercase letters, numbers and dashes. The handle is exactly what you
+        type: <code className="font-mono">pm</code> answers to{" "}
+        <code className="font-mono">@pm</code>.
       </p>
       <textarea
         placeholder="Own the spec. Ask about scope, not syntax."

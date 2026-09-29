@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { hasDatabase, makeFixture } from "../test/fixtures";
 import "../test/mock-superset";
 
-describe.skipIf(!hasDatabase())("asking an agent on your own channel", () => {
+describe.skipIf(!hasDatabase())("asking an agent on your own folder", () => {
   let superset: typeof import("@roster/superset");
   let delegations: typeof import("./delegations");
   let agents: typeof import("./agents");
@@ -20,7 +20,7 @@ describe.skipIf(!hasDatabase())("asking an agent on your own channel", () => {
 
     const pm = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "pm",
       brief: "Own the spec. Ask about scope, not syntax.",
     });
@@ -69,7 +69,7 @@ describe.skipIf(!hasDatabase())("asking an agent on your own channel", () => {
 
     const pm = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "pm",
     });
 
@@ -131,7 +131,7 @@ describe.skipIf(!hasDatabase())("asking an agent on your own channel", () => {
 
     const pm = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "pm",
     });
 
@@ -164,7 +164,7 @@ describe.skipIf(!hasDatabase())("asking an agent on your own channel", () => {
 
     const pm = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "pm",
     });
 
@@ -212,7 +212,7 @@ describe.skipIf(!hasDatabase())("asking an agent on your own channel", () => {
 
     const pm = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "pm",
     });
 
@@ -270,7 +270,7 @@ describe.skipIf(!hasDatabase())("asking an agent on your own channel", () => {
 
     const pm = await agents.createAgent({
       organizationId: fixture.orgId,
-      projectId: fixture.projectId,
+      folderId: fixture.folderId,
       name: "pm",
     });
 
@@ -343,10 +343,10 @@ describe.skipIf(!hasDatabase())("asking an agent on your own channel", () => {
     await fixture.cleanup();
   });
 
-  it("still cuts a fresh worktree for an agent on another channel", async () => {
+  it("still cuts a fresh worktree for an agent on another folder", async () => {
     const fixture = await makeFixture("othercwd");
     const parent = await fixture.thread();
-    const other = await fixture.channel("othercwd-design");
+    await fixture.channel("othercwd-design");
 
     vi.mocked(superset.createWorkspace).mockClear();
 
@@ -360,8 +360,18 @@ describe.skipIf(!hasDatabase())("asking an agent on your own channel", () => {
     });
 
     expect(result.sameWorktree).toBe(false);
-    expect(result.childThreadId).not.toBeNull();
+    expect(result.childThreadId).toBeNull();
     expect(vi.mocked(superset.createWorkspace)).toHaveBeenCalledTimes(1);
+
+    const { db, threadSessions } = await import("@roster/db");
+    const { and, eq } = await import("drizzle-orm");
+    const joined = await db.query.threadSessions.findFirst({
+      where: and(
+        eq(threadSessions.threadId, parent.threadId),
+        eq(threadSessions.role, "delegate"),
+      ),
+    });
+    expect(joined).toBeDefined();
 
     await fixture.cleanup();
   });

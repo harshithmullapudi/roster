@@ -47,6 +47,7 @@ describe.skipIf(!hasDatabase)("which sessions may rest at idle", () => {
     const {
       db,
       delegations,
+      folders,
       members,
       messages,
       organizations,
@@ -85,15 +86,15 @@ describe.skipIf(!hasDatabase)("which sessions may rest at idle", () => {
       role: "owner",
       createdAt: new Date(),
     });
-    await db.insert(projects).values({
-      id: ids.project,
+    const folderId = randomUUID();
+    await db.insert(folders).values({
+      id: folderId,
       organizationId: ids.org,
       supersetProjectId: "superset-project",
       supersetHostId: "host-1",
       supersetOrgId: ids.org,
       name: "rest",
-      slug: "rest",
-      addedByMemberId: ids.member,
+      ownerMemberId: ids.member,
     });
     await db.insert(members).values({
       id: ids.agent,
@@ -102,8 +103,16 @@ describe.skipIf(!hasDatabase)("which sessions may rest at idle", () => {
       role: "member",
       type: "agent",
       agentName: "agent-rest",
-      projectId: ids.project,
+      folderId,
       createdAt: new Date(),
+    });
+    await db.insert(projects).values({
+      id: ids.project,
+      organizationId: ids.org,
+      name: "rest",
+      slug: "rest",
+      defaultAgentId: ids.agent,
+      addedByMemberId: ids.member,
     });
 
     let seq = 0;
@@ -151,6 +160,11 @@ describe.skipIf(!hasDatabase)("which sessions may rest at idle", () => {
       await db.delete(threads).where(eq(threads.organizationId, ids.org));
       await db.delete(messages).where(eq(messages.organizationId, ids.org));
       await db.delete(projects).where(eq(projects.id, ids.project));
+      await db
+        .update(members)
+        .set({ folderId: null })
+        .where(eq(members.organizationId, ids.org));
+      await db.delete(folders).where(eq(folders.organizationId, ids.org));
       await db.delete(members).where(eq(members.organizationId, ids.org));
       await db.delete(organizations).where(eq(organizations.id, ids.org));
       await db.delete(users).where(eq(users.id, ids.user));

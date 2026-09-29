@@ -120,6 +120,13 @@
       "when": 1790624402691,
       "tag": "0016_real_logan",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790710802691,
+      "tag": "0017_channels_agents_folders",
+      "breakpoints": true
     }
   ]
 }

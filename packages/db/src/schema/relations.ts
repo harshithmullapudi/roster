@@ -7,7 +7,7 @@ import {
   sessions,
   users,
 } from "./auth";
-import { projects } from "./roster";
+import { folders, projects } from "./roster";
 
 export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
@@ -29,16 +29,36 @@ export const projectsRelations = relations(projects, ({ one }) => ({
     fields: [projects.organizationId],
     references: [organizations.id],
   }),
+  defaultAgent: one(members, {
+    fields: [projects.defaultAgentId],
+    references: [members.id],
+  }),
   addedBy: one(members, {
     fields: [projects.addedByMemberId],
     references: [members.id],
   }),
 }));
 
+export const foldersRelations = relations(folders, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [folders.organizationId],
+    references: [organizations.id],
+  }),
+  owner: one(members, {
+    fields: [folders.ownerMemberId],
+    references: [members.id],
+  }),
+  agents: many(members),
+}));
+
 export const membersRelations = relations(members, ({ one }) => ({
   organization: one(organizations, {
     fields: [members.organizationId],
     references: [organizations.id],
+  }),
+  folder: one(folders, {
+    fields: [members.folderId],
+    references: [folders.id],
   }),
   user: one(users, { fields: [members.userId], references: [users.id] }),
 }));

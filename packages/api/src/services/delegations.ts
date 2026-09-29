@@ -4,7 +4,6 @@ import {
   db,
   delegations,
   messages,
-  projects,
   type SelectDelegation,
   threads,
 } from "@roster/db";
@@ -19,11 +18,9 @@ import { emitMessageById } from "./message-events";
 import { notifyDelegationReceived } from "./notifications";
 import {
   askingSession,
-  createThread,
   ensureStarted,
   joinThread,
   markWaiting,
-  startSession,
   steer,
 } from "./sessions";
 import { markdownToTiptap, textToTiptap } from "../utils/tiptap";
@@ -39,7 +36,6 @@ export interface DelegationRequest extends ChannelScope {
 export interface DelegationResult {
   id: string;
   targetHandle: string;
-  targetChannelId: string;
   childThreadId: string | null;
   sameWorktree: boolean;
   depth: number;
@@ -144,40 +140,22 @@ export async function delegate(
     });
   }
 
-  const sameWorktree = target.projectId === parent.projectId;
+  const sameWorktree = target.folderId === asker.folderId;
 
-  const rootMessageId = await postRequest({
+  await postRequest({
     organizationId: args.organizationId,
-    channelId: target.projectId,
+    channelId: parent.projectId,
     askerId: asker.id,
     askerHandle: asker.handle,
     targetHandle: target.handle,
     task,
-    threadId: sameWorktree ? parent.id : null,
-    parentMessageId: sameWorktree ? parent.rootMessageId : null,
+    threadId: parent.id,
+    parentMessageId: parent.rootMessageId,
     dedupeKey: `delegation-request:${parent.id}:${createHash("sha256")
       .update(`${target.id}:${task}`)
       .digest("base64url")
       .slice(0, 22)}`,
   });
-
-  const childThread = sameWorktree
-    ? null
-    : await createThread({
-        organizationId: args.organizationId,
-        projectId: target.projectId,
-        rootMessageId,
-        agentMemberId: target.id,
-        runAsMemberId: await channelOwner(target.projectId),
-      });
-
-  if (!sameWorktree && !childThread) {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message:
-        "This thread is already waiting on an answer. Wait for it before asking again.",
-    });
-  }
 
   const [row] = await db
     .insert(delegations)
@@ -186,7 +164,7 @@ export async function delegate(
       parentThreadId: parent.id,
       originMemberId: asker.id,
       targetMemberId: target.id,
-      childThreadId: childThread?.id ?? null,
+      childThreadId: null,
       task,
       depth,
     })
@@ -200,7 +178,7 @@ export async function delegate(
   }
 
   await notifyDelegationReceived({
-    childThreadId: childThread?.id ?? parent.id,
+    childThreadId: parent.id,
     originChannelId: parent.projectId,
     delegationId: row.id,
     task,
@@ -213,60 +191,33 @@ export async function delegate(
     originChannelId: parent.projectId,
   };
 
-  if (sameWorktree) {
-    const joined = await joinThread({
-      threadId: parent.id,
-      agentMemberId: target.id,
-      projectId: target.projectId,
-      text: task,
-      delegation,
-    });
+  const joined = await joinThread({
+    threadId: parent.id,
+    agentMemberId: target.id,
+    projectId: parent.projectId,
+    text: task,
+    delegation,
+  });
 
-    if (!joined) {
-      await db
-        .update(delegations)
-        .set({ status: "failed", answeredAt: new Date() })
-        .where(eq(delegations.id, row.id));
+  if (!joined) {
+    await db
+      .update(delegations)
+      .set({ status: "failed", answeredAt: new Date() })
+      .where(eq(delegations.id, row.id));
 
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message:
-          "This thread has no worktree open for another agent to work in.",
-      });
-    }
-  } else {
-    await startSession({
-      threadId: childThread!.id,
-      text: task,
-      delegation,
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "That agent has no folder to work in.",
     });
   }
 
   return {
     id: row.id,
     targetHandle: target.handle,
-    targetChannelId: target.projectId,
-    childThreadId: childThread?.id ?? null,
+    childThreadId: null,
     sameWorktree,
     depth,
   };
-}
-
-async function channelOwner(projectId: string): Promise<string> {
-  const [row] = await db
-    .select({ memberId: projects.addedByMemberId })
-    .from(projects)
-    .where(eq(projects.id, projectId))
-    .limit(1);
-
-  if (!row) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "That channel is no longer linked to a project.",
-    });
-  }
-
-  return row.memberId;
 }
 
 async function postRequest(args: {
@@ -397,7 +348,7 @@ export async function settleDelegationFor(args: {
       thread: parent,
       text,
       authorMemberId: row.targetMemberId,
-      agentChannelId: answering?.projectId ?? parent.projectId,
+      agentChannelId: parent.projectId,
     });
   }
 

@@ -343,12 +343,8 @@ export async function notifyDelegationReceived(args: {
   const [asker] = await db
     .select({ slug: projects.slug, agentName: members.agentName })
     .from(projects)
-    .leftJoin(
-      members,
-      and(eq(members.projectId, projects.id), eq(members.type, "agent")),
-    )
+    .leftJoin(members, eq(members.id, projects.defaultAgentId))
     .where(eq(projects.id, args.originChannelId))
-    .orderBy(members.createdAt)
     .limit(1);
 
   const [owner] = await db

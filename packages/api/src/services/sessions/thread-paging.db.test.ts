@@ -23,6 +23,7 @@ describe.skipIf(!hasDatabase)("paging back through a long thread", () => {
     const { randomUUID } = await import("node:crypto");
     const {
       db,
+      folders,
       members,
       messages,
       organizations,
@@ -61,14 +62,34 @@ describe.skipIf(!hasDatabase)("paging back through a long thread", () => {
       role: "owner",
       createdAt: new Date(),
     });
-    await db.insert(projects).values({
-      id: ids.project,
+    const folderId = randomUUID();
+    await db.insert(folders).values({
+      id: folderId,
       organizationId: ids.org,
       supersetProjectId: "superset-project",
       supersetHostId: "host-1",
       supersetOrgId: ids.org,
       name: "paging",
+      ownerMemberId: ids.member,
+    });
+    const [agent] = await db
+      .insert(members)
+      .values({
+        organizationId: ids.org,
+        userId: null,
+        role: "member",
+        type: "agent",
+        agentName: "paging",
+        folderId,
+        createdAt: new Date(),
+      })
+      .returning({ id: members.id });
+    await db.insert(projects).values({
+      id: ids.project,
+      organizationId: ids.org,
+      name: "paging",
       slug: "paging",
+      defaultAgentId: agent!.id,
       addedByMemberId: ids.member,
     });
 
@@ -112,6 +133,11 @@ describe.skipIf(!hasDatabase)("paging back through a long thread", () => {
       await db.delete(messages).where(eq(messages.organizationId, ids.org));
       await db.delete(threads).where(eq(threads.id, ids.thread));
       await db.delete(projects).where(eq(projects.id, ids.project));
+      await db
+        .update(members)
+        .set({ folderId: null })
+        .where(eq(members.organizationId, ids.org));
+      await db.delete(folders).where(eq(folders.organizationId, ids.org));
       await db.delete(members).where(eq(members.organizationId, ids.org));
       await db.delete(organizations).where(eq(organizations.id, ids.org));
       await db.delete(users).where(eq(users.id, ids.user));

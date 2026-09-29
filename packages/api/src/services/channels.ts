@@ -1,17 +1,13 @@
-import { channelStars, db, members, projects, users } from "@roster/db";
-import { and, asc, eq, isNotNull, ne, or, sql } from "drizzle-orm";
+import { channelStars, db, folders, members, projects, users } from "@roster/db";
+import { TRPCError } from "@trpc/server";
+import { aliasedTable, and, asc, eq, isNotNull, ne, or, sql } from "drizzle-orm";
 
 import { can } from "../lib/access";
 import { agentDisplay, normalizeHandle } from "../lib/agent-identity";
 import type { ChannelVisibility } from "../lib/channel-visibility";
+import { slugifyProject, uniqueProjectSlug } from "../utils/project-slug";
 
-const MAIN_AGENT_HANDLE = sql<string | null>`(
-  select m."agent_name" from "auth"."members" m
-   where m."project_id" = ${projects.id}
-     and m."type" = 'agent'
-     and m."archived_at" is null
-   order by m."created_at" asc
-   limit 1)`;
+const defaultAgents = aliasedTable(members, "default_agents");
 
 export interface Channel {
   id: string;
@@ -19,6 +15,7 @@ export interface Channel {
   slug: string;
   visibility: string;
   starred: boolean;
+  defaultAgentId: string;
   repoOwner: string | null;
   repoName: string | null;
   repoPath: string | null;
@@ -46,13 +43,16 @@ export async function listChannels(scope: ChannelScope): Promise<ChannelGroups> 
       name: projects.name,
       slug: projects.slug,
       visibility: projects.visibility,
-      repoOwner: projects.repoOwner,
-      repoName: projects.repoName,
-      repoPath: projects.repoPath,
+      defaultAgentId: projects.defaultAgentId,
+      repoOwner: folders.repoOwner,
+      repoName: folders.repoName,
+      repoPath: folders.repoPath,
       starred: isNotNull(channelStars.id),
-      mainAgentHandle: MAIN_AGENT_HANDLE,
+      mainAgentHandle: defaultAgents.agentName,
     })
     .from(projects)
+    .leftJoin(defaultAgents, eq(defaultAgents.id, projects.defaultAgentId))
+    .leftJoin(folders, eq(folders.id, defaultAgents.folderId))
     .leftJoin(
       channelStars,
       and(
@@ -225,6 +225,24 @@ export async function requireOrgProject(
 
 export interface ChannelPatch {
   visibility?: ChannelVisibility;
+  defaultAgentId?: string;
+}
+
+async function requireOrgAgent(organizationId: string, agentId: string) {
+  const agent = await db.query.members.findFirst({
+    where: and(
+      eq(members.id, agentId),
+      eq(members.organizationId, organizationId),
+      eq(members.type, "agent"),
+    ),
+  });
+  if (!agent || agent.archivedAt) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "That agent is not one of this workspace's.",
+    });
+  }
+  return agent;
 }
 
 export async function updateChannel(
@@ -232,6 +250,10 @@ export async function updateChannel(
 ) {
   const project = await requireOrgProject(args);
   if (!project) return null;
+
+  if (args.patch.defaultAgentId !== undefined) {
+    await requireOrgAgent(args.organizationId, args.patch.defaultAgentId);
+  }
 
   const patch = Object.fromEntries(
     Object.entries(args.patch).filter(([, value]) => value !== undefined),
@@ -245,6 +267,55 @@ export async function updateChannel(
     .returning();
 
   return updated ?? null;
+}
+
+export async function createChannel(
+  args: ChannelScope & {
+    name: string;
+    defaultAgentId: string;
+    visibility?: ChannelVisibility;
+  },
+) {
+  const name = args.name.trim();
+  if (name.length === 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "A channel needs a name.",
+    });
+  }
+
+  await requireOrgAgent(args.organizationId, args.defaultAgentId);
+
+  const existing = await db.query.projects.findMany({
+    where: eq(projects.organizationId, args.organizationId),
+    columns: { slug: true },
+  });
+  const slug = uniqueProjectSlug(
+    slugifyProject(name),
+    new Set(existing.map((row) => row.slug)),
+  );
+
+  const [row] = await db
+    .insert(projects)
+    .values({
+      organizationId: args.organizationId,
+      name,
+      slug,
+      defaultAgentId: args.defaultAgentId,
+      addedByMemberId: args.memberId,
+      visibility: args.visibility ?? "public",
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  if (!row) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "A channel with that name already exists.",
+    });
+  }
+
+  return row;
 }
 
 export interface ChannelWatch {

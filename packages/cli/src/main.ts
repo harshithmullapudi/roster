@@ -101,7 +101,7 @@ async function agents(parsed: ReturnType<typeof parseArgs>): Promise<void> {
     channelId ? { channelId } : undefined,
   )) as Array<{
     handle: string;
-    channelSlug: string;
+    folder: string;
     brief: string | null;
   }>;
 
@@ -114,7 +114,7 @@ async function agents(parsed: ReturnType<typeof parseArgs>): Promise<void> {
   for (const row of rows) {
     const brief = row.brief?.split("\n")[0]?.trim() ?? "";
     console.log(
-      `@${row.handle.padEnd(width)}  #${row.channelSlug}${brief ? `  ${brief}` : ""}`,
+      `@${row.handle.padEnd(width)}  ${row.folder}${brief ? `  ${brief}` : ""}`,
     );
   }
 }
@@ -143,10 +143,10 @@ async function createAgent(
     name,
     brief: flagString(parsed, "brief"),
     ephemeral: parsed.flags.ephemeral === true ? true : undefined,
-  })) as { handle: string; channelSlug: string; ephemeral: boolean };
+  })) as { handle: string; folder: string; ephemeral: boolean };
 
   console.log(
-    `@${agent.handle} is on #${agent.channelSlug}${
+    `@${agent.handle} works in ${agent.folder}${
       agent.ephemeral ? ", until this thread is done" : ""
     }. Ask it with \`roster ask ${agent.handle} "<task>"\`.`,
   );
@@ -164,19 +164,19 @@ async function getAgent(parsed: ReturnType<typeof parseArgs>): Promise<void> {
 
   const agent = (await query(config, "cli.getAgent", { handle })) as {
     handle: string;
-    channelSlug: string;
+    folder: string;
     brief: string | null;
     main: boolean;
     ephemeral: boolean;
   };
 
   const marks = [
-    agent.main ? "channel agent" : null,
+    agent.main ? "default agent" : null,
     agent.ephemeral ? "ephemeral" : null,
   ].filter(Boolean);
 
   console.log(
-    `@${agent.handle}  #${agent.channelSlug}${marks.length > 0 ? `  (${marks.join(", ")})` : ""}`,
+    `@${agent.handle}  ${agent.folder}${marks.length > 0 ? `  (${marks.join(", ")})` : ""}`,
   );
   console.log("");
   console.log(agent.brief ?? "No brief.");
@@ -205,9 +205,9 @@ async function updateAgent(
     handle,
     name,
     brief,
-  })) as { handle: string; channelSlug: string; brief: string | null };
+  })) as { handle: string; folder: string; brief: string | null };
 
-  console.log(`@${updated.handle} on #${updated.channelSlug} updated.`);
+  console.log(`@${updated.handle} updated.`);
   if (brief !== undefined) console.log(updated.brief ?? "Brief cleared.");
 }
 

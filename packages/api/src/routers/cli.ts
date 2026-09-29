@@ -4,6 +4,7 @@ import { z } from "zod";
 import { TASK_STATUSES } from "../lib/task-status";
 import {
   createAgent,
+  defaultAgentFor,
   listAgents,
   resolveAgent,
   updateAgent,
@@ -73,19 +74,6 @@ async function reachableAgent(
     throw new TRPCError({
       code: "NOT_FOUND",
       message: `No agent called "${handle}". Run \`roster agents\` to see who there is.`,
-    });
-  }
-
-  const project = await requireOrgProject({
-    organizationId: ctx.organizationId,
-    memberId: ctx.member.id,
-    role: ctx.member.role,
-    projectId: agent.projectId,
-  });
-  if (!project) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "That agent is on a channel you cannot reach.",
     });
   }
 
@@ -224,12 +212,20 @@ export const cliRouter = createTRPCRouter({
         role: ctx.member.role,
       };
 
-      const found = await listAgents(scope, { projectId: input?.channelId });
+      const channelAgent = input?.channelId
+        ? await defaultAgentFor(input.channelId)
+        : null;
+
+      const found = await listAgents(
+        scope,
+        channelAgent ? { folderId: channelAgent.folderId } : undefined,
+      );
 
       return found.map((agent) => ({
         handle: agent.handle,
-        channelId: agent.projectId,
-        channelSlug: agent.channelSlug,
+        folderId: agent.folderId,
+        folder: agent.folderName,
+        channelSlug: agent.folderName,
         brief: agent.brief,
       }));
     }),
@@ -244,16 +240,30 @@ export const cliRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await requireOrgProject({
+      const project = await requireOrgProject({
         organizationId: ctx.organizationId,
         memberId: ctx.member.id,
         role: ctx.member.role,
         projectId: input.channelId,
       });
+      if (!project) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "That channel is not one you can see.",
+        });
+      }
+
+      const sibling = await defaultAgentFor(project.id);
+      if (!sibling) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "That channel has no default agent to share a folder with.",
+        });
+      }
 
       const agent = await createAgent({
         organizationId: ctx.organizationId,
-        projectId: input.channelId,
+        folderId: sibling.folderId,
         name: input.name,
         brief: input.brief ?? null,
         ephemeral: input.ephemeral,
@@ -261,7 +271,8 @@ export const cliRouter = createTRPCRouter({
 
       return {
         handle: agent.handle,
-        channelSlug: agent.channelSlug,
+        folder: agent.folderName,
+        channelSlug: agent.folderName,
         ephemeral: agent.ephemeral,
       };
     }),
@@ -292,8 +303,9 @@ export const cliRouter = createTRPCRouter({
 
       return {
         handle: agent.handle,
-        channelId: agent.projectId,
-        channelSlug: agent.channelSlug,
+        folderId: agent.folderId,
+        folder: agent.folderName,
+        channelSlug: agent.folderName,
         brief: agent.brief,
         main: agent.main,
         ephemeral: agent.ephemeral,
@@ -320,7 +332,8 @@ export const cliRouter = createTRPCRouter({
 
       return {
         handle: updated.handle,
-        channelSlug: updated.channelSlug,
+        folder: updated.folderName,
+        channelSlug: updated.folderName,
         brief: updated.brief,
         ephemeral: updated.ephemeral,
       };

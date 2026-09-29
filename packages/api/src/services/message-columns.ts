@@ -47,7 +47,6 @@ export const messageColumns = {
   authorEmail: users.email,
   authorType: members.type,
   authorAgentName: members.agentName,
-  authorProjectId: members.projectId,
   agentChannelId: messages.agentChannelId,
   reactions: reactionsSql.as("message_reactions"),
 };
@@ -69,13 +68,12 @@ export interface MessageRow {
   authorEmail: string | null;
   authorType: string | null;
   authorAgentName: string | null;
-  authorProjectId: string | null;
   agentChannelId: string | null;
   reactions: unknown;
 }
 
 export function toChannelMessage(row: MessageRow): ChannelMessage {
-  const { authorType, authorAgentName, authorProjectId, reactions, ...rest } =
+  const { authorType, authorAgentName, reactions, ...rest } =
     row;
   const spokenByAgent = authorType === "agent";
   const handle = spokenByAgent ? normalizeHandle(authorAgentName) : null;
@@ -86,7 +84,7 @@ export function toChannelMessage(row: MessageRow): ChannelMessage {
     reactions: toReactionRefs(reactions),
     authorName: spokenByAgent ? null : row.authorName,
     authorEmail: spokenByAgent ? null : row.authorEmail,
-    agentChannelId: row.agentChannelId ?? (spokenByAgent ? authorProjectId : null),
+    agentChannelId: row.agentChannelId ?? (spokenByAgent ? row.projectId : null),
     agentHandle: handle,
     agentDisplay: handle ? agentDisplay(handle) : null,
     attachments: [],
