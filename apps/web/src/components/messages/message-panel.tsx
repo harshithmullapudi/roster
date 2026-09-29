@@ -236,7 +236,7 @@ export function MessagePanel({
           onSentRef={stickToBottom}
         />
       </div>
-      <div className="pb-safe-2 shrink-0 px-2 sm:px-4 sm:pb-4">
+      <div className="pb-safe-2 shrink-0 px-3 sm:px-5 sm:pb-5">
         {pausedCount > 0 ? (
           <WatchResumeOffer projectId={projectId} count={pausedCount} />
         ) : null}

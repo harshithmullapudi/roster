@@ -386,6 +386,10 @@
   }
 }
 
+@utility pb-safe-2 {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+}
+
 @layer utilities {
   .h-page {
     height: calc(100vh - 56px - var(--tabbar-height, 0px));
@@ -413,9 +417,6 @@
   .px-safe {
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
-  }
-  .pb-safe-2 {
-    padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
   }
 
   @media (max-width: 639px) {
