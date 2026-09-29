@@ -63,6 +63,7 @@ export function NewChannelDialog({ orgSlug }: { orgSlug: string }) {
       const made = await trpc.channels.create.mutate({
         name: name.trim(),
         defaultAgentId: agentId,
+        visibility: "private",
       });
       setOpen(false);
       setName("");
@@ -81,7 +82,7 @@ export function NewChannelDialog({ orgSlug }: { orgSlug: string }) {
       <Button
         variant="ghost"
         size="sm"
-        aria-label="New channel"
+        aria-label="New private channel"
         className="text-muted-foreground hover:text-foreground h-5 w-5 shrink-0 !rounded-md p-0"
         onClick={() => setOpen(true)}
       >
@@ -90,7 +91,7 @@ export function NewChannelDialog({ orgSlug }: { orgSlug: string }) {
 
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>New channel</DialogTitle>
+          <DialogTitle>New private channel</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={submit} className="flex flex-col gap-4">
