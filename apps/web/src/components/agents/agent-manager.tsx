@@ -290,7 +290,7 @@ function AgentEditDialog({
           {error ? <p className="text-destructive text-sm">{error}</p> : null}
         </div>
 
-        <DialogFooter className="sm:justify-between">
+        <DialogFooter className="bg-transparent sm:justify-between">
           {!agent.main ? (
             <Button
               variant="ghost"

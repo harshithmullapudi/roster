@@ -139,7 +139,7 @@ export function NewChannelDialog({ orgSlug }: { orgSlug: string }) {
 
           {error ? <p className="text-destructive text-sm">{error}</p> : null}
 
-          <DialogFooter>
+          <DialogFooter className="bg-transparent">
             <Button
               type="button"
               variant="ghost"
