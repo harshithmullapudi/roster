@@ -15,7 +15,9 @@ import {
   parseInboxFilter,
   showsUnreadDot,
   subscriptionLabel,
+  trackOpenThread,
   type InboxFilter,
+  type InboxTriage,
 } from "~/utils/inbox-threads";
 import { liveThreadsKey, threadTitle } from "~/utils/live-threads";
 import { relativeTime } from "~/utils/relative-time";
@@ -251,26 +253,18 @@ export function ThreadInbox({ threads }: ThreadInboxProps) {
     [pathname, searchParams],
   );
 
-  const [pinnedUnread] = useState(
-    () => new Set(threads.filter(isUnread).map((thread) => thread.id)),
-  );
-
-  const [opened, setOpened] = useState<ReadonlySet<string>>(
-    () => new Set(openThreadId ? [openThreadId] : []),
-  );
+  const [triage, setTriage] = useState<InboxTriage>(() => ({
+    pinned: new Set(threads.filter(isUnread).map((thread) => thread.id)),
+    opened: new Set(openThreadId ? [openThreadId] : []),
+  }));
 
   useEffect(() => {
-    if (!openThreadId) return;
-    setOpened((previous) =>
-      previous.has(openThreadId)
-        ? previous
-        : new Set(previous).add(openThreadId),
-    );
+    setTriage((previous) => trackOpenThread(previous, openThreadId));
   }, [openThreadId]);
 
   const groups = useMemo(
-    () => groupInboxThreads(filterInboxThreads(threads, filter, pinnedUnread)),
-    [threads, filter, pinnedUnread],
+    () => groupInboxThreads(filterInboxThreads(threads, filter, triage.pinned)),
+    [threads, filter, triage.pinned],
   );
   useClearUnreadOnOpen();
 
@@ -295,7 +289,7 @@ export function ThreadInbox({ threads }: ThreadInboxProps) {
                       key={thread.id}
                       thread={thread}
                       href={threadHref(thread.id)}
-                      unread={showsUnreadDot(thread, pinnedUnread, opened)}
+                      unread={showsUnreadDot(thread, triage.pinned, triage.opened)}
                       selected={thread.id === openThreadId}
                     />
                   ))}

@@ -53,6 +53,26 @@ export function showsUnreadDot(
   return isUnread(thread) || pinned.has(thread.id);
 }
 
+export interface InboxTriage {
+  pinned: ReadonlySet<string>;
+  opened: ReadonlySet<string>;
+}
+
+export function trackOpenThread(
+  state: InboxTriage,
+  openThreadId: string | null,
+): InboxTriage {
+  if (openThreadId) {
+    if (state.opened.has(openThreadId)) return state;
+    return { ...state, opened: new Set(state.opened).add(openThreadId) };
+  }
+
+  if (state.opened.size === 0) return state;
+  const pinned = new Set(state.pinned);
+  for (const id of state.opened) pinned.delete(id);
+  return { pinned, opened: new Set() };
+}
+
 export type InboxFilter = "unread" | "needs-input" | "all";
 
 export function parseInboxFilter(value: string | null): InboxFilter {
