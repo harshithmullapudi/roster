@@ -3,13 +3,13 @@
 import type { ChannelGroups } from "@roster/api";
 import { cn } from "@roster/ui";
 import { useQuery } from "@tanstack/react-query";
-import { Folder } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { ChannelMark } from "~/components/logo/channel-mark";
 import { flattenChannels } from "~/components/tasks/channel-picker";
-import { ThreadStatus, TurnCompleted } from "~/components/threads/thread-status";
 import { liveThreadsKey, toSessionItems } from "~/utils/live-threads";
+import { isLive, isWaiting, statusLabel, statusTone } from "~/utils/thread-rows";
 import { trpc } from "~/utils/trpc";
 import { readHistory } from "~/utils/thread-history";
 import {
@@ -145,31 +145,50 @@ export function ThreadSwitcher({
 
   if (!session) return null;
 
+  const current = rows[session.index];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4">
       <div
         role="listbox"
         aria-label="Switch thread"
-        className="bg-popover text-popover-foreground shadow-1 flex max-h-[70vh] w-full max-w-lg flex-col overflow-hidden rounded-xl p-1"
+        className="bg-popover/95 text-popover-foreground ring-border flex max-w-[min(56rem,100%)] flex-col items-center gap-4 rounded-2xl p-5 shadow-2xl ring-1 backdrop-blur-xl"
       >
-        <div className="no-scrollbar flex-1 overflow-y-auto">
+        <div className="no-scrollbar flex max-w-full items-center gap-3 overflow-x-auto">
           {rows.map((item, index) => (
-            <SwitcherRow
+            <SwitcherTile
               key={item.threadId}
               item={item}
               selected={index === session.index}
             />
           ))}
         </div>
-        <div className="text-muted-foreground border-border mt-1 border-t px-2 py-1.5 text-xs">
-          Hold ⌘ and tap / to cycle · shift to go back · release to switch
+
+        {/*
+         * One caption for the whole strip, the way macOS names only the app
+         * you are holding on. A title per tile would not fit and would turn
+         * the strip into the list this replaced.
+         */}
+        <div className="flex min-h-10 w-full max-w-md flex-col items-center gap-1 text-center">
+          <span className="w-full truncate text-sm font-medium">
+            {current?.title}
+          </span>
+          <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
+            <span>{current?.channelSlug}</span>
+            <span aria-hidden>·</span>
+            <span>
+              {current?.turnUnseen
+                ? "Turn completed"
+                : statusLabel(current?.status ?? "")}
+            </span>
+          </span>
         </div>
       </div>
     </div>
   );
 }
 
-function SwitcherRow({
+function SwitcherTile({
   item,
   selected,
 }: {
@@ -179,29 +198,36 @@ function SwitcherRow({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (selected) ref.current?.scrollIntoView({ block: "nearest" });
+    if (selected) ref.current?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [selected]);
+
+  const tone = item.turnUnseen
+    ? "bg-success"
+    : (statusTone(item.status) ?? "bg-muted-foreground");
 
   return (
     <div
       ref={ref}
       role="option"
       aria-selected={selected}
+      aria-label={`${item.title} · ${item.channelSlug}`}
       className={cn(
-        "flex min-h-8 items-center gap-2 rounded-lg px-2 py-1.5 text-sm",
-        selected && "bg-accent text-accent-foreground",
+        "relative flex size-16 shrink-0 items-center justify-center rounded-2xl transition-colors",
+        selected
+          ? "bg-accent text-foreground"
+          : "text-muted-foreground/70 hover:text-muted-foreground",
       )}
     >
-      <Folder size={14} className="text-muted-foreground shrink-0" />
-      <span className="min-w-0 flex-1 truncate">{item.title}</span>
-      <span className="text-muted-foreground shrink-0 text-xs">
-        {item.channelSlug}
-      </span>
-      {item.turnUnseen ? (
-        <TurnCompleted />
-      ) : (
-        <ThreadStatus status={item.status} />
-      )}
+      <ChannelMark className="size-7" />
+      <span
+        className={cn(
+          "ring-popover absolute bottom-1.5 right-1.5 size-2.5 rounded-full ring-2",
+          tone,
+          // A pulse means work is happening, matching the thread list. Needs
+          // input is deliberately still.
+          (isLive(item.status) || isWaiting(item.status)) && "animate-pulse",
+        )}
+      />
     </div>
   );
 }
