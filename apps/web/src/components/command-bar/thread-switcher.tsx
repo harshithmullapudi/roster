@@ -14,10 +14,11 @@ import { trpc } from "~/utils/trpc";
 import { readHistory } from "~/utils/thread-history";
 import {
   cycleIndex,
+  groupLabel,
   initialIndex,
   isCancelKey,
-  isCycleKey,
   isReleaseKey,
+  stepFor,
   toSwitcherItems,
   type SwitcherItem,
 } from "~/utils/thread-switcher";
@@ -40,14 +41,16 @@ export function ThreadSwitcher({
 }: ThreadSwitcherProps) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
-  const open = session !== null;
 
   const allChannels = useMemo(() => flattenChannels(channels), [channels]);
 
+  // Not gated on the switcher being open: the list is only threads that are
+  // live or unread, so waiting for the first press to fetch would mean the
+  // press finds nothing to show. The key is the one the dock already polls, so
+  // this subscribes to a warm cache rather than adding traffic.
   const { data: live } = useQuery({
     queryKey: liveThreadsKey(),
     queryFn: () => trpc.threads.live.query(),
-    enabled: open,
     staleTime: 5_000,
   });
 
@@ -56,65 +59,73 @@ export function ThreadSwitcher({
     [live, allChannels, orgSlug],
   );
 
-  const latest = useRef({ sessions, currentThreadId, orgSlug });
-  latest.current = { sessions, currentThreadId, orgSlug };
+  const latest = useRef({ sessions, currentThreadId });
+  latest.current = { sessions, currentThreadId };
+
+  // Key handling reads the hold from a ref rather than from state, so an arrow
+  // arriving in the same frame as the slash that opened the switcher still
+  // sees it open and can be swallowed before the page scrolls.
+  const held = useRef<Session | null>(null);
 
   useEffect(() => {
+    function hold(next: Session | null) {
+      held.current = next;
+      setSession(next);
+    }
+
     function onKeyDown(event: KeyboardEvent) {
-      if (isCycleKey(event)) {
+      const current = held.current;
+      const step = stepFor(event, current !== null);
+
+      if (step) {
         event.preventDefault();
-        const backwards = event.shiftKey;
+        const backwards = step === "previous";
 
-        setSession((current) => {
-          if (current) {
-            return {
-              ...current,
-              index: cycleIndex(current.index, current.items.length, backwards),
-            };
-          }
-
-          const items = toSwitcherItems({
-            history: readHistory(),
-            sessions: latest.current.sessions,
-            orgSlug: latest.current.orgSlug,
-            currentThreadId: latest.current.currentThreadId,
+        if (current) {
+          hold({
+            ...current,
+            index: cycleIndex(current.index, current.items.length, backwards),
           });
-          if (items.length === 0) return null;
+          return;
+        }
 
-          const start = initialIndex(items);
-          return {
-            items,
-            index: backwards ? cycleIndex(start, items.length, true) : start,
-          };
+        const items = toSwitcherItems({
+          history: readHistory(),
+          sessions: latest.current.sessions,
+          currentThreadId: latest.current.currentThreadId,
+        });
+        if (items.length === 0) return;
+
+        const start = initialIndex(items);
+        hold({
+          items,
+          index: backwards ? cycleIndex(start, items.length, true) : start,
         });
         return;
       }
 
-      if (isCancelKey(event)) {
-        // Only swallow the key when there is something to cancel — the thread
-        // pane listens for Escape too.
-        setSession((current) => {
-          if (current) event.preventDefault();
-          return null;
-        });
+      // Only swallow Escape when there is something to cancel — the thread
+      // pane listens for it too.
+      if (isCancelKey(event) && current) {
+        event.preventDefault();
+        hold(null);
       }
     }
 
     function onKeyUp(event: KeyboardEvent) {
       if (!isReleaseKey(event)) return;
 
-      setSession((current) => {
-        const target = current?.items[current.index];
-        if (target && target.threadId !== latest.current.currentThreadId) {
-          router.push(target.href);
-        }
-        return null;
-      });
+      const current = held.current;
+      const target = current?.items[current.index];
+      if (target && target.threadId !== latest.current.currentThreadId) {
+        router.push(target.href);
+      }
+      hold(null);
     }
 
     // Cmd+Tabbing out of the app leaves the modifier up in another window, so
     // the release that would commit never arrives here.
-    const onBlur = () => setSession(null);
+    const onBlur = () => hold(null);
 
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -154,7 +165,7 @@ export function ThreadSwitcher({
             <Fragment key={item.threadId}>
               {item.group !== rows[index - 1]?.group && (
                 <div className="text-muted-foreground px-2.5 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wider">
-                  {item.group === "working" ? "Working" : "Finished"}
+                  {groupLabel(item.group)}
                 </div>
               )}
               <SwitcherRow item={item} selected={index === session.index} />
@@ -163,7 +174,7 @@ export function ThreadSwitcher({
         </div>
 
         <div className="text-muted-foreground border-border mt-1 shrink-0 border-t px-2.5 pb-1 pt-2 text-[11px]">
-          Hold ⌘ · tap / to move · shift to go back
+          Hold ⌘ · / or ↑↓ to move · shift to go back
         </div>
       </div>
     </div>

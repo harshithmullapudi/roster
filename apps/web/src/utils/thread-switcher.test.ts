@@ -5,10 +5,12 @@ import type { VisitedThread } from "~/utils/thread-history";
 import {
   SWITCHER_LIMIT,
   cycleIndex,
+  groupLabel,
   initialIndex,
   isCancelKey,
   isCycleKey,
   isReleaseKey,
+  stepFor,
   toSwitcherItems,
 } from "~/utils/thread-switcher";
 
@@ -52,10 +54,10 @@ describe("initialIndex", () => {
       threadId: `t${index}`,
       title: `t${index}`,
       channelSlug: "design",
-      status: "completed",
+      status: "running",
       turnUnseen: false,
       href: "#",
-      group: "finished" as const,
+      group: "running" as const,
       isCurrent,
     }));
 
@@ -122,6 +124,29 @@ describe("isCycleKey", () => {
   });
 });
 
+describe("stepFor", () => {
+  it("walks forward on the slash, backward with shift", () => {
+    expect(stepFor(key("Slash", { metaKey: true }), false)).toBe("next");
+    expect(stepFor(key("Slash", { metaKey: true, shiftKey: true }), false)).toBe(
+      "previous",
+    );
+  });
+
+  it("walks the list with the arrows while the switcher is up", () => {
+    expect(stepFor(key("ArrowDown", { metaKey: true }), true)).toBe("next");
+    expect(stepFor(key("ArrowUp", { metaKey: true }), true)).toBe("previous");
+  });
+
+  it("leaves the arrows to the page when the switcher is closed", () => {
+    expect(stepFor(key("ArrowDown", { metaKey: true }), false)).toBe(null);
+    expect(stepFor(key("ArrowUp"), false)).toBe(null);
+  });
+
+  it("ignores keys that are neither", () => {
+    expect(stepFor(key("KeyJ", { metaKey: true }), true)).toBe(null);
+  });
+});
+
 describe("isReleaseKey", () => {
   it("commits when the modifier that held the switcher open comes up", () => {
     expect(isReleaseKey({ key: "Meta" })).toBe(true);
@@ -140,66 +165,108 @@ describe("isCancelKey", () => {
   });
 });
 
-describe("toSwitcherItems", () => {
-  const orgSlug = "acme";
+describe("groupLabel", () => {
+  it("names the groups the way the rest of the app does", () => {
+    expect(groupLabel("needs-input")).toBe("Needs input");
+    expect(groupLabel("turn-done")).toBe("Turn completed");
+  });
+});
 
-  it("lists visited threads newest first", () => {
+
+describe("toSwitcherItems", () => {
+  it("orders the groups needs input, turn completed, running", () => {
     const items = toSwitcherItems({
-      history: [visit("a"), visit("b")],
-      sessions: [],
-      orgSlug,
+      history: [],
+      sessions: [
+        session("running", "running"),
+        { ...session("done", "idle"), turnUnseen: true },
+        session("asking", "needs_input"),
+      ],
       currentThreadId: null,
     });
 
-    expect(items.map((item) => item.threadId)).toEqual(["a", "b"]);
-    expect(items[0]?.href).toBe("/acme/design?thread=a");
+    expect(items.map((item) => [item.threadId, item.group])).toEqual([
+      ["asking", "needs-input"],
+      ["done", "turn-done"],
+      ["running", "running"],
+    ]);
   });
 
-  it("shows a visited thread with no live session as completed", () => {
+  it("leaves out a thread that came to rest with its turn already read", () => {
+    const items = toSwitcherItems({
+      history: [visit("a"), visit("b")],
+      sessions: [session("a", "idle"), session("b", "running")],
+      currentThreadId: null,
+    });
+
+    expect(items.map((item) => item.threadId)).toEqual(["b"]);
+  });
+
+  it("leaves out a visited thread with no live session at all", () => {
     const items = toSwitcherItems({
       history: [visit("a")],
       sessions: [],
-      orgSlug,
       currentThreadId: null,
     });
 
-    expect(items[0]?.status).toBe("completed");
-    expect(items[0]?.turnUnseen).toBe(false);
+    expect(items).toEqual([]);
   });
 
-  it("takes the live status and fresher title for a thread still running", () => {
+  it("keeps a rested thread whose last turn is unread", () => {
+    const items = toSwitcherItems({
+      history: [visit("a")],
+      sessions: [{ ...session("a", "idle"), turnUnseen: true }],
+      currentThreadId: null,
+    });
+
+    expect(items.map((item) => [item.threadId, item.group])).toEqual([
+      ["a", "turn-done"],
+    ]);
+  });
+
+  it("groups a thread by what it is doing over an unread turn behind it", () => {
+    const items = toSwitcherItems({
+      history: [],
+      sessions: [
+        { ...session("a", "needs_input"), turnUnseen: true },
+        { ...session("b", "running"), turnUnseen: true },
+      ],
+      currentThreadId: null,
+    });
+
+    expect(items.map((item) => item.group)).toEqual(["needs-input", "running"]);
+  });
+
+  it("counts a waiting thread as running", () => {
+    const items = toSwitcherItems({
+      history: [visit("a")],
+      sessions: [session("a", "waiting")],
+      currentThreadId: null,
+    });
+
+    expect(items[0]?.group).toBe("running");
+  });
+
+  it("takes the live status and fresher title for a visited thread", () => {
     const items = toSwitcherItems({
       history: [visit("a", "stale title")],
-      sessions: [{ ...session("a"), turnUnseen: true }],
-      orgSlug,
+      sessions: [session("a", "running")],
       currentThreadId: null,
     });
 
     expect(items[0]).toMatchObject({
       threadId: "a",
       status: "running",
-      turnUnseen: true,
       title: "live a",
       channelSlug: "eng",
+      href: "/acme/eng?thread=a",
     });
   });
 
-  it("reaches running threads you have never opened", () => {
+  it("puts a visited thread above one you have never opened", () => {
     const items = toSwitcherItems({
       history: [visit("a")],
-      sessions: [session("z")],
-      orgSlug,
-      currentThreadId: null,
-    });
-
-    expect(items.map((item) => item.threadId)).toEqual(["z", "a"]);
-  });
-
-  it("puts a visited working thread above an unvisited one", () => {
-    const items = toSwitcherItems({
-      history: [visit("a")],
-      sessions: [session("a", "running"), session("z", "running")],
-      orgSlug,
+      sessions: [session("z", "running"), session("a", "running")],
       currentThreadId: null,
     });
 
@@ -210,7 +277,6 @@ describe("toSwitcherItems", () => {
     const items = toSwitcherItems({
       history: [],
       sessions: [session("z"), session("y")],
-      orgSlug,
       currentThreadId: null,
     });
 
@@ -220,8 +286,7 @@ describe("toSwitcherItems", () => {
   it("marks the thread you are looking at rather than moving it", () => {
     const items = toSwitcherItems({
       history: [visit("a"), visit("b"), visit("c")],
-      sessions: [],
-      orgSlug,
+      sessions: [session("a"), session("b"), session("c")],
       currentThreadId: "c",
     });
 
@@ -229,52 +294,29 @@ describe("toSwitcherItems", () => {
     expect(items.map((item) => item.isCurrent)).toEqual([false, false, true]);
   });
 
-  it("puts working threads above finished ones", () => {
-    const items = toSwitcherItems({
-      history: [visit("a"), visit("b"), visit("c")],
-      sessions: [session("b", "running")],
-      orgSlug,
-      currentThreadId: null,
-    });
-
-    expect(items.map((item) => [item.threadId, item.group])).toEqual([
-      ["b", "working"],
-      ["a", "finished"],
-      ["c", "finished"],
-    ]);
-  });
-
   it("keeps most-recent-first inside each group", () => {
     const items = toSwitcherItems({
       history: [visit("a"), visit("b"), visit("c"), visit("d")],
-      sessions: [session("b", "running"), session("d", "needs_input")],
-      orgSlug,
+      sessions: [
+        session("a", "running"),
+        session("b", "needs_input"),
+        session("c", "running"),
+        session("d", "needs_input"),
+      ],
       currentThreadId: null,
     });
 
     expect(items.map((item) => item.threadId)).toEqual(["b", "d", "a", "c"]);
   });
 
-  it("counts waiting and needs-input as working, not finished", () => {
-    const items = toSwitcherItems({
-      history: [visit("a"), visit("b")],
-      sessions: [session("a", "waiting"), session("b", "needs_input")],
-      orgSlug,
-      currentThreadId: null,
-    });
-
-    expect(items.every((item) => item.group === "working")).toBe(true);
-  });
-
   it("caps the list", () => {
-    const history = Array.from({ length: SWITCHER_LIMIT + 4 }, (_, index) =>
-      visit(`thread-${index}`),
+    const sessions = Array.from({ length: SWITCHER_LIMIT + 4 }, (_, index) =>
+      session(`thread-${index}`),
     );
 
     const items = toSwitcherItems({
-      history,
-      sessions: [],
-      orgSlug,
+      history: sessions.map((item) => visit(item.id)),
+      sessions,
       currentThreadId: null,
     });
 
