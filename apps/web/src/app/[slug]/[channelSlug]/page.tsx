@@ -20,6 +20,7 @@ import { CollapseCompletedToggle } from "~/components/channels/collapse-complete
 import { WatchToggle } from "~/components/channels/watch-toggle";
 import { ChannelMark } from "~/components/logo/channel-mark";
 import { MessagePanel } from "~/components/messages/message-panel";
+import { ChannelSearch } from "~/components/search/channel-search";
 import { DockChannelBinding } from "~/components/terminals/dock-provider";
 import { ThreadSidebar } from "~/components/threads/thread-sidebar";
 import { TaskList } from "~/components/tasks/task-list";
@@ -128,7 +129,7 @@ export default async function ChannelPage({
         </span>
       }
       tabs={
-        <span className="flex w-max items-center gap-0.5">
+        <span className="flex w-full items-center gap-0.5">
           <ChannelTabs
             basePath={basePath}
             channelSlug={channel.slug}
@@ -144,6 +145,11 @@ export default async function ChannelPage({
                 title: task.title,
                 nextRunAt: task.nextRunAt!.toISOString(),
               }))}
+          />
+          <ChannelSearch
+            projectId={channel.id}
+            orgSlug={organization.slug}
+            channelSlug={channel.slug}
           />
         </span>
       }

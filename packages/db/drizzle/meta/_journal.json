@@ -127,6 +127,13 @@
       "when": 1790710802691,
       "tag": "0017_channels_agents_folders",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790797202691,
+      "tag": "0018_search",
+      "breakpoints": true
     }
   ]
 }
