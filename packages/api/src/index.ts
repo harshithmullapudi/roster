@@ -48,6 +48,12 @@ export {
 } from "./services/messages";
 export { type ReactionRef } from "./services/reactions";
 export {
+  type MessageHit,
+  type SearchResults,
+  type TaskHit,
+} from "./services/search";
+export { type SnippetSegment } from "./lib/search-query";
+export {
   readAttachment,
   readAttachmentWithKey,
   uploadAttachment,

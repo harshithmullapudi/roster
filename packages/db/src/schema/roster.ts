@@ -183,6 +183,10 @@ export const messages = rosterSchema.table(
     index("messages_project_created_idx").on(table.projectId, table.createdAt),
     index("messages_parent_idx").on(table.parentMessageId),
     index("messages_thread_idx").on(table.threadId),
+    index("messages_search_idx").using(
+      "gin",
+      sql`to_tsvector('english', ${table.text})`,
+    ),
   ],
 );
 
@@ -440,6 +444,10 @@ export const tasks = rosterSchema.table(
     index("tasks_due_idx")
       .on(table.nextRunAt)
       .where(sql`rrule is not null and next_run_at is not null`),
+    index("tasks_search_idx").using(
+      "gin",
+      sql`to_tsvector('english', ${table.title})`,
+    ),
   ],
 );
 

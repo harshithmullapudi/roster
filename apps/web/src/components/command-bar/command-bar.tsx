@@ -11,13 +11,23 @@ import {
   CommandSeparator,
 } from "@roster/ui";
 import { useQuery } from "@tanstack/react-query";
-import { CircleCheck, Folder, Plus, Star, Users } from "lucide-react";
+import {
+  CircleCheck,
+  Folder,
+  MessageSquare,
+  Plus,
+  Star,
+  Users,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { Snippet } from "~/components/search/snippet";
 import { flattenChannels } from "~/components/tasks/channel-picker";
 import { ThreadStatus, TurnCompleted } from "~/components/threads/thread-status";
+import { useSearch } from "~/hooks/use-search";
 import { liveThreadsKey, toSessionItems } from "~/utils/live-threads";
+import { messageHref, taskHref } from "~/utils/search";
 import { trpc } from "~/utils/trpc";
 
 export interface CommandBarProps {
@@ -50,6 +60,8 @@ export function CommandBar({
     () => toSessionItems(live ?? [], allChannels, orgSlug),
     [live, allChannels, orgSlug],
   );
+
+  const { results } = useSearch({ query, enabled: open });
 
   const go = (href: string) => {
     onOpenChange(false);
@@ -142,6 +154,53 @@ export function CommandBar({
             <span>Members</span>
           </CommandItem>
         </CommandGroup>
+
+        {results.messages.length > 0 && (
+          <>
+            <CommandSeparator />
+
+            <CommandGroup heading="Messages">
+              {results.messages.map((hit) => (
+                <CommandItem
+                  key={hit.id}
+                  value={`${query} message ${hit.id}`}
+                  onSelect={() => go(messageHref(orgSlug, hit))}
+                >
+                  <MessageSquare size={14} className="text-muted-foreground" />
+                  <Snippet
+                    snippet={hit.snippet}
+                    className="text-muted-foreground min-w-0 flex-1 truncate text-sm"
+                  />
+                  <span className="text-muted-foreground shrink-0 text-xs">
+                    {hit.channelSlug}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
+
+        {results.tasks.length > 0 && (
+          <>
+            <CommandSeparator />
+
+            <CommandGroup heading="Tasks">
+              {results.tasks.map((hit) => (
+                <CommandItem
+                  key={hit.id}
+                  value={`${query} task ${hit.id}`}
+                  onSelect={() => go(taskHref(orgSlug, hit))}
+                >
+                  <CircleCheck size={14} className="text-muted-foreground" />
+                  <Snippet snippet={hit.snippet} className="min-w-0 flex-1 truncate" />
+                  <span className="text-muted-foreground shrink-0 text-xs">
+                    {hit.channelSlug ?? "backlog"}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
       </CommandList>
     </CommandDialog>
   );
