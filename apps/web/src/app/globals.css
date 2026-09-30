@@ -704,6 +704,7 @@
   .tiptap {
     outline: none;
     border: none;
+    overflow-wrap: anywhere;
 
     :first-child {
       margin-top: 0 !important;
@@ -779,7 +780,7 @@
     }
 
     pre {
-      @apply bg-grayAlpha-50 text-foreground w-fit rounded-md p-4;
+      @apply bg-grayAlpha-50 text-foreground w-fit max-w-full overflow-x-auto rounded-md p-4;
       margin: 1.5rem 0;
 
       code {
