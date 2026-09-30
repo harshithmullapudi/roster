@@ -44,9 +44,9 @@ export function ThreadAffordance({ thread, href }: ThreadAffordanceProps) {
       ) : null}
       {live ? <ThreadStatus status={thread.status} /> : null}
       {!live && turnUnseen(thread) ? <TurnCompleted /> : null}
-      {thread.waitingOn ? (
+      {thread.waitingOn.length > 0 ? (
         <span className="text-muted-foreground truncate text-xs">
-          {`on @${thread.waitingOn.handle}`}
+          {`on ${thread.waitingOn.map((waiting) => `@${waiting.handle}`).join(", ")}`}
         </span>
       ) : null}
     </Link>

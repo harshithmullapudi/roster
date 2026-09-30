@@ -26,7 +26,9 @@ import {
 
 import { type DeleteRefusal, deleteRefusal } from "../lib/message-delete";
 import { DELEGATION_KIND } from "../lib/message-kind";
+import { normalizeHandle } from "../lib/agent-identity";
 import { mentionedHandles } from "../lib/message-mentions";
+import { withRelayNote } from "../lib/mention-relay";
 import { sessionErrorDetail } from "../utils/session-error";
 import { contiguousRun, type RunMessage } from "../utils/message-run";
 import {
@@ -49,7 +51,6 @@ import {
   createThread,
   ensureStarted,
   joinableThread,
-  joinThread,
   reapThread,
   startSession,
   steer,
@@ -340,57 +341,65 @@ export async function sendMessage(args: {
   if (target) {
     void routeThreadReply({
       threadId: target.id,
-      projectId: args.projectId,
       mentioned,
       text: agentText(row),
     }).catch(() => {});
   } else if (row.parentMessageId === null && addressed) {
-    void driveSession(row, mentioned[0]?.id).catch(() => {});
+    void driveSession(row, mentioned).catch(() => {});
   }
 
   return row;
 }
 
 /**
- * A plain reply steers whoever is already running the thread. Naming an
- * agent routes to it instead — steering its live session when it has one,
- * bringing it into the thread when it does not.
+ * Every message in a thread goes to the agent running it, tags and all. An
+ * agent named alongside it is not pulled in over its head — the note tells it
+ * to pass the work on with `roster ask`, so one agent stays answerable for
+ * the thread.
  */
 async function routeThreadReply(args: {
   threadId: string;
-  projectId: string;
   mentioned: Agent[];
   text: string;
 }): Promise<void> {
-  if (args.mentioned.length === 0) {
-    await steer({ threadId: args.threadId, text: args.text });
-    return;
-  }
+  await steer({
+    threadId: args.threadId,
+    text: withRelayNote({
+      text: args.text,
+      threadId: args.threadId,
+      ...(await relayFor(args.threadId, args.mentioned)),
+    }),
+  });
+}
 
-  for (const agent of args.mentioned) {
-    const inThread = await db.query.threadSessions.findFirst({
-      where: and(
-        eq(threadSessions.threadId, args.threadId),
-        eq(threadSessions.agentMemberId, agent.id),
-      ),
-      columns: { id: true },
-    });
+/**
+ * Who the thread's agent has to pass work on to, and what it calls itself when
+ * it does. Anyone already in the thread is left out — it can read them there.
+ */
+async function relayFor(
+  threadId: string,
+  mentioned: Agent[],
+): Promise<{ handles: string[]; me: string }> {
+  if (mentioned.length === 0) return { handles: [], me: "" };
 
-    if (inThread) {
-      await steer({
-        threadId: args.threadId,
-        agentMemberId: agent.id,
-        text: args.text,
-      });
-    } else {
-      await joinThread({
-        threadId: args.threadId,
-        agentMemberId: agent.id,
-        projectId: args.projectId,
-        text: args.text,
-      });
-    }
-  }
+  const inThread = await db
+    .select({
+      agentMemberId: threadSessions.agentMemberId,
+      role: threadSessions.role,
+      handle: members.agentName,
+    })
+    .from(threadSessions)
+    .innerJoin(members, eq(threadSessions.agentMemberId, members.id))
+    .where(eq(threadSessions.threadId, threadId));
+
+  const present = new Set(inThread.map((row) => row.agentMemberId));
+
+  return {
+    handles: mentioned
+      .filter((agent) => !present.has(agent.id))
+      .map((agent) => agent.handle),
+    me: normalizeHandle(inThread.find((row) => row.role === "main")?.handle),
+  };
 }
 
 export function agentText(message: ChannelMessage): string {
@@ -473,7 +482,7 @@ async function contextFor(message: ChannelMessage): Promise<string[]> {
 
 async function driveSession(
   message: ChannelMessage,
-  agentMemberId?: string,
+  mentioned: Agent[] = [],
 ): Promise<void> {
   await ensureStarted();
 
@@ -490,14 +499,21 @@ async function driveSession(
     organizationId: project.organizationId,
     projectId: message.projectId,
     rootMessageId: message.id,
-    agentMemberId,
     authorMemberId: message.authorMemberId,
   });
   if (!thread) return;
 
   await linkTaskFor(message, thread.id);
 
-  await startSession({ threadId: thread.id, text: agentText(message), context });
+  await startSession({
+    threadId: thread.id,
+    text: withRelayNote({
+      text: agentText(message),
+      threadId: thread.id,
+      ...(await relayFor(thread.id, mentioned)),
+    }),
+    context,
+  });
 }
 
 const TASK_CLIENT_ID = /^task:([0-9a-f-]{36})(?::\d+)?$/i;

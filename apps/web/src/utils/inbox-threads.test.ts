@@ -30,7 +30,7 @@ function thread(over: Partial<InboxThread> = {}): InboxThread {
     replyCount: 2,
     lastReplyAt: null,
     replierNames: ["Ada"],
-    waitingOn: null,
+    waitingOn: [],
     completedAt: null,
     completedByMemberId: null,
     channelSlug: "web",

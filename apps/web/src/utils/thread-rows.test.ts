@@ -163,7 +163,7 @@ const row = (thread: Partial<ThreadItem> = {}): ThreadItem => ({
   replyCount: 2,
   lastReplyAt: ENDED_AT,
   replierNames: ["Harshith"],
-  waitingOn: null,
+  waitingOn: [],
   completedAt: null,
   completedByMemberId: null,
   lastReadAt: READ_AT,
@@ -255,24 +255,37 @@ describe("markThreadSeen", () => {
 
 describe("parsePublishedThread", () => {
   it("carries the agent the thread is waiting on", () => {
-    const parsed = parsePublishedThread(published({ waitingOn: waiting }));
-    expect(parsed?.waitingOn).toEqual(waiting);
+    const parsed = parsePublishedThread(published({ waitingOn: [waiting] }));
+    expect(parsed?.waitingOn).toEqual([waiting]);
+  });
+
+  it("carries every agent a thread fanned its asks out to", () => {
+    const parsed = parsePublishedThread(
+      published({
+        waitingOn: [waiting, { ...waiting, handle: "fern-core" }],
+      }),
+    );
+    expect(parsed?.waitingOn.map((one) => one.handle)).toEqual([
+      "sol-superset",
+      "fern-core",
+    ]);
   });
 
   it("keeps a missing child thread id, so the card still renders unlinked", () => {
     const parsed = parsePublishedThread(
-      published({ waitingOn: { ...waiting, threadId: null } }),
+      published({ waitingOn: [{ ...waiting, threadId: null }] }),
     );
-    expect(parsed?.waitingOn?.threadId).toBeNull();
-    expect(parsed?.waitingOn?.handle).toBe("sol-superset");
+    expect(parsed?.waitingOn[0]?.threadId).toBeNull();
+    expect(parsed?.waitingOn[0]?.handle).toBe("sol-superset");
   });
 
-  it("is null when the payload carries no delegation", () => {
-    expect(parsePublishedThread(published({}))?.waitingOn).toBeNull();
+  it("is empty when the payload carries no delegation", () => {
+    expect(parsePublishedThread(published({}))?.waitingOn).toEqual([]);
     expect(
-      parsePublishedThread(published({ waitingOn: { handle: "sol-superset" } }))
-        ?.waitingOn,
-    ).toBeNull();
+      parsePublishedThread(
+        published({ waitingOn: [{ handle: "sol-superset" }] }),
+      )?.waitingOn,
+    ).toEqual([]);
   });
 
   it("carries the completion across the wire, so other viewers see it", () => {

@@ -38,7 +38,7 @@ roster read messages --thread-id ID [--limit N]
 roster tasks create <title> [--channel-id ID]
 roster tasks status <task-id> <todo|in_progress|done>
 roster tasks update <task-id> [--title TEXT] [--channel-id ID]
-roster ask <handle> <task> --thread THREAD_ID
+roster ask <handle> <task> --thread THREAD_ID --as YOUR_HANDLE
 roster files download <url-or-id> [--out PATH]
 ```
 
@@ -60,8 +60,11 @@ task waits in the backlog for a person to assign.
 channel starts on it right away, the same as creating it there would have. A
 task a thread is already working on cannot be moved.
 
-`roster ask` returns immediately. Say what you asked for and end your turn —
-you are resumed automatically with the answer. Never poll.
+`roster ask` returns immediately, and one thread can wait on several agents at
+once — one open ask per agent. `--as` is your own handle, from the `<roster>`
+block: several agents work in a thread, and it is how the answer comes back to
+the one that asked. Say what you asked for and end your turn — you are resumed
+automatically once every answer is back. Never poll.
 
 ## Self-hosting
 

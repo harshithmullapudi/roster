@@ -27,7 +27,7 @@ import { trpc } from "~/utils/trpc";
 
 import { ReplyAvatars } from "./reply-avatars";
 import { ThreadStatus } from "./thread-status";
-import { WaitingOnCard } from "./waiting-on";
+import { WaitingOnCards } from "./waiting-on";
 
 function useClearUnreadOnOpen(): void {
   const queryClient = useQueryClient();
@@ -137,9 +137,9 @@ function ThreadRow({
         </span>
       </Link>
 
-      {thread.waitingOn && (
+      {thread.waitingOn.length > 0 && (
         <div className="pl-3.5">
-          <WaitingOnCard waiting={thread.waitingOn} />
+          <WaitingOnCards waiting={thread.waitingOn} />
         </div>
       )}
     </li>

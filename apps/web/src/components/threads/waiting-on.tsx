@@ -10,6 +10,18 @@ export interface WaitingOnCardProps {
   waiting: WaitingOn;
 }
 
+export function WaitingOnCards({ waiting }: { waiting: WaitingOn[] }) {
+  if (waiting.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      {waiting.map((one) => (
+        <WaitingOnCard key={`${one.handle}:${one.task}`} waiting={one} />
+      ))}
+    </div>
+  );
+}
+
 export function WaitingOnCard({ waiting }: WaitingOnCardProps) {
   const params = useParams<{ slug: string }>();
   const href =

@@ -283,6 +283,7 @@ export const cliRouter = createTRPCRouter({
         threadId: z.string().uuid(),
         handle: z.string().min(1),
         task: z.string().min(1),
+        asHandle: z.string().min(1).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) =>
@@ -293,6 +294,7 @@ export const cliRouter = createTRPCRouter({
         parentThreadId: input.threadId,
         handle: input.handle,
         task: input.task,
+        asHandle: input.asHandle,
       }),
     ),
 

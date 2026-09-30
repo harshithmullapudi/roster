@@ -32,7 +32,7 @@ const USAGE = `roster — talk to Roster from inside an agent session
                              [--rrule RULE] [--at HH:MM] [--timezone TZ]
   roster tasks status <task-id> <todo|in_progress|done>
   roster tasks update <task-id> [--title TEXT] [--channel-id ID]
-  roster ask <handle> <task> --thread THREAD_ID
+  roster ask <handle> <task> --thread THREAD_ID --as YOUR_HANDLE
   roster react <message-id> <emoji>         add or remove a reaction
   roster files download <url-or-id> [--out PATH]
 
@@ -55,8 +55,11 @@ its status resets and it posts in the channel again on every occurrence.
 repeating task needs a channel, since its whole job is to post in one.
 
 Your thread id, channel id and task id are in the <roster> block at the top
-of your session. \`roster ask\` returns immediately — say what you asked for
-and end your turn; you are resumed automatically with the answer.
+of your session, and so is the handle to pass to --as: more than one agent
+works in a thread, and that is how an answer finds its way back to you.
+\`roster ask\` returns immediately, and you can ask several agents in one turn
+— one open ask each. Say what you asked for and end your turn; you are
+resumed automatically once every answer is back.
 
 An agent on your own channel works in the worktree you are already in, taking
 its turn while you wait. An agent on another channel gets a worktree of its
@@ -405,12 +408,20 @@ async function ask(parsed: ReturnType<typeof parseArgs>): Promise<void> {
     threadId,
     handle,
     task,
-  })) as { targetHandle: string; sameWorktree: boolean };
+    asHandle: flagString(parsed, "as"),
+  })) as { targetHandle: string; sameWorktree: boolean; pending?: string[] };
 
+  const asked = `Asked @${result.targetHandle}${
+    result.sameWorktree ? ", working in this same worktree" : ""
+  }.`;
+
+  const pending = result.pending ?? [result.targetHandle];
   console.log(
-    `Asked @${result.targetHandle}${
-      result.sameWorktree ? ", working in this same worktree" : ""
-    }. Say so and end your turn — you will be resumed with the answer.`,
+    pending.length > 1
+      ? `${asked} This thread is waiting on ${pending
+          .map((waiting) => `@${waiting}`)
+          .join(", ")}. Ask anyone else you need, then say so and end your turn — you will be resumed once they have all answered.`
+      : `${asked} Ask anyone else you need, then say so and end your turn — you will be resumed with the answer.`,
   );
 }
 
