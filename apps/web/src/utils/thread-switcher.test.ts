@@ -47,16 +47,36 @@ function key(
 }
 
 describe("initialIndex", () => {
+  const items = (flags: boolean[]) =>
+    flags.map((isCurrent, index) => ({
+      threadId: `t${index}`,
+      title: `t${index}`,
+      channelSlug: "design",
+      status: "completed",
+      turnUnseen: false,
+      href: "#",
+      group: "finished" as const,
+      isCurrent,
+    }));
+
   it("lands on the thread you were in before, so a tap toggles back", () => {
-    expect(initialIndex({ length: 4, onThread: true })).toBe(1);
+    expect(initialIndex(items([false, true, false]))).toBe(0);
+  });
+
+  it("skips the thread you are already looking at wherever it sits", () => {
+    expect(initialIndex(items([true, false, false]))).toBe(1);
   });
 
   it("stays put when the thread you are in is the only one", () => {
-    expect(initialIndex({ length: 1, onThread: true })).toBe(0);
+    expect(initialIndex(items([true]))).toBe(0);
   });
 
   it("lands on the most recent thread when you are not in one", () => {
-    expect(initialIndex({ length: 4, onThread: false })).toBe(0);
+    expect(initialIndex(items([false, false]))).toBe(0);
+  });
+
+  it("has nowhere to go with nothing to show", () => {
+    expect(initialIndex([])).toBe(0);
   });
 });
 
@@ -164,10 +184,21 @@ describe("toSwitcherItems", () => {
     });
   });
 
-  it("reaches running threads you have never opened, after the visited ones", () => {
+  it("reaches running threads you have never opened", () => {
     const items = toSwitcherItems({
       history: [visit("a")],
       sessions: [session("z")],
+      orgSlug,
+      currentThreadId: null,
+    });
+
+    expect(items.map((item) => item.threadId)).toEqual(["z", "a"]);
+  });
+
+  it("puts a visited working thread above an unvisited one", () => {
+    const items = toSwitcherItems({
+      history: [visit("a")],
+      sessions: [session("a", "running"), session("z", "running")],
       orgSlug,
       currentThreadId: null,
     });
@@ -186,7 +217,7 @@ describe("toSwitcherItems", () => {
     expect(items.map((item) => item.threadId)).toEqual(["z", "y"]);
   });
 
-  it("hoists the thread you are looking at to the front", () => {
+  it("marks the thread you are looking at rather than moving it", () => {
     const items = toSwitcherItems({
       history: [visit("a"), visit("b"), visit("c")],
       sessions: [],
@@ -194,10 +225,48 @@ describe("toSwitcherItems", () => {
       currentThreadId: "c",
     });
 
-    expect(items.map((item) => item.threadId)).toEqual(["c", "a", "b"]);
+    expect(items.map((item) => item.threadId)).toEqual(["a", "b", "c"]);
+    expect(items.map((item) => item.isCurrent)).toEqual([false, false, true]);
   });
 
-  it("keeps the thread you are looking at even past the cap", () => {
+  it("puts working threads above finished ones", () => {
+    const items = toSwitcherItems({
+      history: [visit("a"), visit("b"), visit("c")],
+      sessions: [session("b", "running")],
+      orgSlug,
+      currentThreadId: null,
+    });
+
+    expect(items.map((item) => [item.threadId, item.group])).toEqual([
+      ["b", "working"],
+      ["a", "finished"],
+      ["c", "finished"],
+    ]);
+  });
+
+  it("keeps most-recent-first inside each group", () => {
+    const items = toSwitcherItems({
+      history: [visit("a"), visit("b"), visit("c"), visit("d")],
+      sessions: [session("b", "running"), session("d", "needs_input")],
+      orgSlug,
+      currentThreadId: null,
+    });
+
+    expect(items.map((item) => item.threadId)).toEqual(["b", "d", "a", "c"]);
+  });
+
+  it("counts waiting and needs-input as working, not finished", () => {
+    const items = toSwitcherItems({
+      history: [visit("a"), visit("b")],
+      sessions: [session("a", "waiting"), session("b", "needs_input")],
+      orgSlug,
+      currentThreadId: null,
+    });
+
+    expect(items.every((item) => item.group === "working")).toBe(true);
+  });
+
+  it("caps the list", () => {
     const history = Array.from({ length: SWITCHER_LIMIT + 4 }, (_, index) =>
       visit(`thread-${index}`),
     );
@@ -206,10 +275,9 @@ describe("toSwitcherItems", () => {
       history,
       sessions: [],
       orgSlug,
-      currentThreadId: `thread-${SWITCHER_LIMIT + 2}`,
+      currentThreadId: null,
     });
 
     expect(items).toHaveLength(SWITCHER_LIMIT);
-    expect(items[0]?.threadId).toBe(`thread-${SWITCHER_LIMIT + 2}`);
   });
 });
