@@ -11,10 +11,19 @@ import {
 } from "react";
 
 import { CommandBar } from "~/components/command-bar/command-bar";
+import { ThreadSwitcher } from "~/components/command-bar/thread-switcher";
 import { useShortcuts } from "~/hooks/use-shortcuts";
+import {
+  readHistory,
+  recordVisit,
+  writeHistory,
+  type VisitedThread,
+} from "~/utils/thread-history";
 
 interface CommandContextValue {
   openCommandBar: () => void;
+  enterThread: (entry: VisitedThread) => void;
+  leaveThread: (threadId: string) => void;
 }
 
 const CommandContext = createContext<CommandContextValue | null>(null);
@@ -39,8 +48,18 @@ export function CommandProvider({
   children,
 }: CommandProviderProps) {
   const [commandBarOpen, setCommandBarOpen] = useState(false);
+  const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
 
   const openCommandBar = useCallback(() => setCommandBarOpen(true), []);
+
+  const enterThread = useCallback((entry: VisitedThread) => {
+    writeHistory(recordVisit(readHistory(), entry));
+    setCurrentThreadId(entry.threadId);
+  }, []);
+
+  const leaveThread = useCallback((threadId: string) => {
+    setCurrentThreadId((current) => (current === threadId ? null : current));
+  }, []);
 
   useShortcuts([
     {
@@ -50,7 +69,10 @@ export function CommandProvider({
     },
   ]);
 
-  const value = useMemo(() => ({ openCommandBar }), [openCommandBar]);
+  const value = useMemo(
+    () => ({ openCommandBar, enterThread, leaveThread }),
+    [openCommandBar, enterThread, leaveThread],
+  );
 
   return (
     <CommandContext.Provider value={value}>
@@ -61,6 +83,12 @@ export function CommandProvider({
         onOpenChange={setCommandBarOpen}
         orgSlug={orgSlug}
         channels={channels}
+      />
+
+      <ThreadSwitcher
+        orgSlug={orgSlug}
+        channels={channels}
+        currentThreadId={currentThreadId}
       />
     </CommandContext.Provider>
   );

@@ -51,6 +51,7 @@ export default async function ThreadsPage({
           <ThreadSidebar
             projectId={openThread.projectId}
             threadId={openThread.id}
+            channelSlug={openThread.channelSlug}
             memberId={member.id}
             authorName={session.user.name}
             authorEmail={session.user.email}

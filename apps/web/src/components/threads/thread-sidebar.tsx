@@ -6,12 +6,14 @@ import Link from "next/link";
 import { OpenSessionButton } from "~/components/terminals/open-session-button";
 
 import { CloseOnEscape } from "./close-on-escape";
+import { RecordThreadVisit } from "./record-thread-visit";
 import { ThreadMenu } from "./thread-menu";
 import { ThreadPanel } from "./thread-panel";
 
 export interface ThreadSidebarProps {
   projectId: string;
   threadId: string;
+  channelSlug: string;
   memberId: string;
   authorName: string;
   authorEmail: string;
@@ -22,6 +24,7 @@ export interface ThreadSidebarProps {
 export function ThreadSidebar({
   projectId,
   threadId,
+  channelSlug,
   memberId,
   authorName,
   authorEmail,
@@ -31,6 +34,11 @@ export function ThreadSidebar({
   return (
     <aside className="border-border flex h-full w-full min-w-0 flex-1 flex-col sm:border-l">
       <CloseOnEscape href={closeHref} />
+      <RecordThreadVisit
+        threadId={threadId}
+        channelSlug={channelSlug}
+        rootText={detail.thread.rootText}
+      />
       <header className="pt-safe relative flex shrink-0 flex-col border-b border-gray-300">
         <div className="h-(--header-height) flex items-center gap-1.5 px-2 sm:px-3">
           <Button
