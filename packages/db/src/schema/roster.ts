@@ -535,16 +535,19 @@ export const delegations = rosterSchema.table(
 
     task: text("task").notNull(),
     status: text("status").default("open").notNull(),
+    reply: text("reply"),
 
     depth: bigint("depth", { mode: "number" }).default(1).notNull(),
 
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     answeredAt: timestamp("answered_at", { withTimezone: true }),
+    reportedAt: timestamp("reported_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("delegations_one_open_per_parent_idx")
-      .on(table.parentThreadId)
+    uniqueIndex("delegations_one_open_per_target_idx")
+      .on(table.parentThreadId, table.targetMemberId)
       .where(sql`status = 'open'`),
+    index("delegations_parent_thread_idx").on(table.parentThreadId),
     index("delegations_child_thread_idx").on(table.childThreadId),
     index("delegations_target_idx").on(table.targetMemberId),
   ],

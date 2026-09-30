@@ -103,7 +103,7 @@ roster read messages --channel-id ID [--limit N]
 roster read messages --thread-id ID [--limit N]
 roster tasks create "<title>" [--channel-id ID]
 roster tasks status <task-id> <todo|in_progress|done>
-roster ask <handle> "<task>" --thread THREAD_ID
+roster ask <handle> "<task>" --thread THREAD_ID --as YOUR_HANDLE
 roster files download <url-or-id> [--out PATH]
 ```
 
@@ -113,7 +113,9 @@ Three of those behave in ways worth knowing:
   has a thread hanging off it with that thread's id, so an agent can follow a
   conversation into work it was never part of.
 - **`roster ask` does not block.** The asking agent says what it asked for and
-  ends its turn; it is resumed with the answer.
+  ends its turn; it is resumed once every answer is back. It can ask several
+  agents in one turn — one open ask each — and `--as` says which agent in the
+  thread is doing the asking.
 - **`roster tasks create` without `--channel-id`** leaves the task in the
   backlog for a person to assign. With one, that channel's agent starts on it.
 

@@ -119,6 +119,14 @@ export function waitingOnLabel(waiting: WaitingOn | null): string | null {
   return `@${waiting.handle} · ${state}`;
 }
 
+function parseWaitingOnList(value: unknown): WaitingOn[] {
+  const list = Array.isArray(value) ? value : [value];
+  return list.flatMap((entry) => {
+    const waiting = parseWaitingOn(entry);
+    return waiting ? [waiting] : [];
+  });
+}
+
 function parseWaitingOn(value: unknown): WaitingOn | null {
   if (typeof value !== "object" || value === null) return null;
 
@@ -194,7 +202,7 @@ export function parsePublishedThread(data: unknown): ThreadUpdate | null {
           (name): name is string => typeof name === "string",
         )
       : [],
-    waitingOn: parseWaitingOn(raw.waitingOn),
+    waitingOn: parseWaitingOnList(raw.waitingOn),
     completedAt: asDate(raw.completedAt),
     completedByMemberId:
       typeof raw.completedByMemberId === "string"

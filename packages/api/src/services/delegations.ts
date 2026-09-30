@@ -3,13 +3,17 @@ import { createHash } from "node:crypto";
 import {
   db,
   delegations,
+  members,
   messages,
   type SelectDelegation,
   threads,
+  threadSessions,
 } from "@roster/db";
 import { TRPCError } from "@trpc/server";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, ne } from "drizzle-orm";
 
+import { normalizeHandle } from "../lib/agent-identity";
+import { type Answer, answersFor } from "../lib/delegation-answers";
 import { DELEGATION_KIND } from "../lib/message-kind";
 import { type Agent, agentById, listAgents, resolveAgent } from "./agents";
 import { allocateSeq, findMemberByHandle } from "./channels";
@@ -31,6 +35,8 @@ export interface DelegationRequest extends ChannelScope {
   parentThreadId: string;
   handle: string;
   task: string;
+  /** The agent doing the asking, as its `<roster>` block names it. */
+  asHandle?: string;
 }
 
 export interface DelegationResult {
@@ -39,6 +45,8 @@ export interface DelegationResult {
   childThreadId: string | null;
   sameWorktree: boolean;
   depth: number;
+  /** Every agent this thread is now waiting on, this one included. */
+  pending: string[];
 }
 
 async function rejectPersonHandle(args: ChannelScope & { handle: string }) {
@@ -69,20 +77,6 @@ export async function delegate(
     });
   }
 
-  const open = await db.query.delegations.findFirst({
-    where: and(
-      eq(delegations.parentThreadId, parent.id),
-      eq(delegations.status, "open"),
-    ),
-  });
-  if (open) {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message:
-        "This thread is already waiting on an answer. Wait for it before asking again.",
-    });
-  }
-
   const target = await resolveAgent({
     organizationId: args.organizationId,
     handle: args.handle,
@@ -99,8 +93,11 @@ export async function delegate(
     });
   }
 
-  const asking = await askingSession(parent.id);
-  const asker = asking ? await agentById(asking.agentMemberId) : null;
+  const asker = await askerFor({
+    organizationId: args.organizationId,
+    parentThreadId: parent.id,
+    asHandle: args.asHandle,
+  });
   if (!asker) {
     throw new TRPCError({
       code: "NOT_FOUND",
@@ -112,6 +109,21 @@ export async function delegate(
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "That is you — just do the work.",
+    });
+  }
+
+  const alreadyAsked = await db.query.delegations.findFirst({
+    where: and(
+      eq(delegations.parentThreadId, parent.id),
+      eq(delegations.targetMemberId, target.id),
+      eq(delegations.status, "open"),
+    ),
+    columns: { id: true },
+  });
+  if (alreadyAsked) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: `You have already asked @${target.handle} — wait for that answer before asking again.`,
     });
   }
 
@@ -173,7 +185,7 @@ export async function delegate(
   if (!row) {
     throw new TRPCError({
       code: "CONFLICT",
-      message: "This thread is already waiting on an answer.",
+      message: `You have already asked @${target.handle}.`,
     });
   }
 
@@ -184,7 +196,8 @@ export async function delegate(
     task,
   });
 
-  await markWaiting({ threadId: parent.id, waitingOn: target.handle });
+  const pending = await openTargets(parent.id, asker.id);
+  await markWaiting({ threadId: parent.id, waitingOn: pending });
 
   const delegation = {
     askedBy: asker.handle,
@@ -200,10 +213,14 @@ export async function delegate(
   });
 
   if (!joined) {
+    const now = new Date();
     await db
       .update(delegations)
-      .set({ status: "failed", answeredAt: new Date() })
+      .set({ status: "failed", answeredAt: now, reportedAt: now })
       .where(eq(delegations.id, row.id));
+
+    const left = await openTargets(parent.id, asker.id);
+    if (left.length > 0) await markWaiting({ threadId: parent.id, waitingOn: left });
 
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -217,6 +234,7 @@ export async function delegate(
     childThreadId: null,
     sameWorktree,
     depth,
+    pending,
   };
 }
 
@@ -313,11 +331,14 @@ export async function settleDelegationFor(args: {
   const pending = await openDelegationFor(args);
   if (!pending) return;
 
+  const reply = args.reply.trim();
+
   const [row] = await db
     .update(delegations)
     .set({
       status: args.failed ? "failed" : "answered",
       answeredAt: new Date(),
+      reply,
     })
     .where(
       and(eq(delegations.id, pending.id), eq(delegations.status, "open")),
@@ -328,7 +349,6 @@ export async function settleDelegationFor(args: {
   const answering = await agentById(row.targetMemberId);
   const handle = answering?.handle ?? "the other agent";
 
-  const reply = args.reply.trim();
   const spoken = args.failed
     ? `I asked @${handle} but that session ended without an answer.`
     : reply;
@@ -352,13 +372,115 @@ export async function settleDelegationFor(args: {
     });
   }
 
+  // An agent can be waiting on several others at once, and a thread can hold
+  // more than one such wait — a delegate may have passed work on again. Each
+  // asker is left parked until its own last answer is in, then resumed with
+  // all of them together.
+  const stillOpen = await openTargets(parent.id, row.originMemberId);
+  if (stillOpen.length > 0) {
+    await markWaiting({ threadId: parent.id, waitingOn: stillOpen });
+    return;
+  }
+
+  const gathered = await takeUnreported(parent.id, row.originMemberId);
+  if (gathered.length === 0) return;
+
   await steer({
     threadId: row.parentThreadId,
     agentMemberId: asker?.id,
-    text: args.failed
-      ? `@${handle} could not complete that. Decide what to do next.`
-      : `@${handle} replied:\n\n${reply}`,
+    text: answersFor(gathered),
   });
+}
+
+/**
+ * Several agents can be at work in one thread, so the liveliest session is no
+ * longer a safe guess at who is asking — an agent says so with `--as`, which
+ * its `<roster>` block hands it. The guess stays for anyone who leaves it out.
+ */
+async function askerFor(args: {
+  organizationId: string;
+  parentThreadId: string;
+  asHandle?: string;
+}): Promise<Agent | null> {
+  if (args.asHandle) {
+    const claimed = await resolveAgent({
+      organizationId: args.organizationId,
+      handle: args.asHandle,
+    });
+
+    if (claimed) {
+      const inThread = await db.query.threadSessions.findFirst({
+        where: and(
+          eq(threadSessions.threadId, args.parentThreadId),
+          eq(threadSessions.agentMemberId, claimed.id),
+        ),
+        columns: { id: true },
+      });
+      if (inThread) return claimed;
+    }
+  }
+
+  const asking = await askingSession(args.parentThreadId);
+  return asking ? agentById(asking.agentMemberId) : null;
+}
+
+async function openTargets(
+  parentThreadId: string,
+  askerId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ handle: members.agentName })
+    .from(delegations)
+    .innerJoin(members, eq(delegations.targetMemberId, members.id))
+    .where(
+      and(
+        eq(delegations.parentThreadId, parentThreadId),
+        eq(delegations.originMemberId, askerId),
+        eq(delegations.status, "open"),
+      ),
+    )
+    .orderBy(asc(delegations.createdAt));
+
+  return rows.map((row) => normalizeHandle(row.handle));
+}
+
+/**
+ * Answers go back to the asker once — whoever settles last carries them all.
+ */
+async function takeUnreported(
+  parentThreadId: string,
+  askerId: string,
+): Promise<Answer[]> {
+  const rows = await db
+    .update(delegations)
+    .set({ reportedAt: new Date() })
+    .where(
+      and(
+        eq(delegations.parentThreadId, parentThreadId),
+        eq(delegations.originMemberId, askerId),
+        ne(delegations.status, "open"),
+        isNull(delegations.reportedAt),
+      ),
+    )
+    .returning({
+      targetMemberId: delegations.targetMemberId,
+      status: delegations.status,
+      reply: delegations.reply,
+      createdAt: delegations.createdAt,
+    });
+
+  const settled = rows.sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+
+  return Promise.all(
+    settled.map(async (answer) => ({
+      handle:
+        (await agentById(answer.targetMemberId))?.handle ?? "the other agent",
+      reply: answer.reply ?? "",
+      failed: answer.status !== "answered",
+    })),
+  );
 }
 
 async function openDelegationFor(args: {

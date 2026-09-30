@@ -31,6 +31,7 @@ import {
   sessionErrorDetail,
   workspaceAlreadyGone,
 } from "../../utils/session-error";
+import { handleList } from "../../lib/handle-list";
 import { sessionPrompt } from "../../utils/message-run";
 import {
   type DelegationContext,
@@ -377,14 +378,16 @@ async function publishThread(threadId: string, hops = 0): Promise<void> {
 
 export async function markWaiting(args: {
   threadId: string;
-  waitingOn: string;
+  waitingOn: string[];
 }): Promise<void> {
+  if (args.waitingOn.length === 0) return;
+
   const session = await mainSession(args.threadId);
   if (!session) return;
 
   const row = await patch(session.id, {
     status: "waiting",
-    lastProgress: `Waiting on @${args.waitingOn}…`,
+    lastProgress: `Waiting on ${handleList(args.waitingOn)}…`,
     error: null,
   });
   if (row) await publishThread(row.threadId);
@@ -1914,15 +1917,17 @@ export function ensureStarted(): Promise<void> {
   return starting;
 }
 
+/**
+ * A channel's own agent runs every thread in it, whoever else was tagged.
+ * Agents from elsewhere come in through `roster ask`, under it.
+ */
 export async function createThread(args: {
   organizationId: string;
   projectId: string;
   rootMessageId: string;
   authorMemberId?: string | null;
-  agentMemberId?: string;
 }): Promise<SelectThread | null> {
-  const agentMemberId =
-    args.agentMemberId ?? (await defaultAgentFor(args.projectId))?.id;
+  const agentMemberId = (await defaultAgentFor(args.projectId))?.id;
   if (!agentMemberId) {
     throw new Error("That channel has no default agent to open a thread with.");
   }

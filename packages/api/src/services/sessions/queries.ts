@@ -62,7 +62,7 @@ export interface ThreadSummary {
   replyCount: number;
   lastReplyAt: Date | null;
   replierNames: string[];
-  waitingOn: WaitingOn | null;
+  waitingOn: WaitingOn[];
   completedAt: Date | null;
   completedByMemberId: string | null;
 }
@@ -216,8 +216,8 @@ function childLead<T>(column: string): SQL<T> {
 
 async function waitingOnByParent(
   parentThreadIds: string[],
-): Promise<Map<string, WaitingOn>> {
-  const found = new Map<string, WaitingOn>();
+): Promise<Map<string, WaitingOn[]>> {
+  const found = new Map<string, WaitingOn[]>();
   if (parentThreadIds.length === 0) return found;
 
   const rows = await db
@@ -242,10 +242,12 @@ async function waitingOnByParent(
         inArray(delegations.parentThreadId, parentThreadIds),
         eq(delegations.status, "open"),
       ),
-    );
+    )
+    .orderBy(asc(delegations.createdAt));
 
   for (const row of rows) {
-    found.set(row.parentThreadId, {
+    const waiting = found.get(row.parentThreadId) ?? [];
+    waiting.push({
       handle: normalizeHandle(row.ownerAgentName),
       display: agentDisplay(row.ownerAgentName),
       channelId: row.channelId,
@@ -255,6 +257,7 @@ async function waitingOnByParent(
       lastProgress: row.lastProgress,
       task: row.task,
     });
+    found.set(row.parentThreadId, waiting);
   }
 
   return found;
@@ -291,7 +294,7 @@ interface SummaryRow {
 interface ThreadExtras {
   replies: Map<string, ReplyStats>;
   leads: Map<string, LeadSession>;
-  waiting: Map<string, WaitingOn>;
+  waiting: Map<string, WaitingOn[]>;
 }
 
 async function threadExtras(threadIds: string[]): Promise<ThreadExtras> {
@@ -325,7 +328,7 @@ function toSummary(row: SummaryRow, extras: ThreadExtras): ThreadSummary {
     replyCount: replies.replyCount,
     lastReplyAt: replies.lastReplyAt,
     replierNames: replies.replierNames,
-    waitingOn: extras.waiting.get(row.id) ?? null,
+    waitingOn: extras.waiting.get(row.id) ?? [],
   };
 }
 
@@ -617,7 +620,7 @@ export interface ThreadPublishState {
   error: string | null;
   startedAt: Date;
   endedAt: Date | null;
-  waitingOn: WaitingOn | null;
+  waitingOn: WaitingOn[];
   completedAt: Date | null;
   completedByMemberId: string | null;
 }
@@ -654,7 +657,7 @@ export async function threadPublishState(
     error: readableError(lead.error),
     startedAt: lead.startedAt ?? new Date(),
     endedAt: lead.endedAt,
-    waitingOn: waiting.get(row.id) ?? null,
+    waitingOn: waiting.get(row.id) ?? [],
     completedAt: asDate(row.completedAt),
     completedByMemberId: row.completedByMemberId,
   };

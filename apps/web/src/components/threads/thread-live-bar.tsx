@@ -10,7 +10,7 @@ import { canRetry, isActive, needsInput } from "~/utils/thread-rows";
 import { ThreadCancel } from "./thread-cancel";
 import { ThreadRetry } from "./thread-retry";
 import { ThreadStatus } from "./thread-status";
-import { WaitingOnCard } from "./waiting-on";
+import { WaitingOnCards } from "./waiting-on";
 
 export interface ThreadLiveBarProps {
   projectId: string;
@@ -65,8 +65,8 @@ export function ThreadLiveBar({
       </span>
       {thread.error ? (
         <span className="text-destructive text-sm">{thread.error}</span>
-      ) : thread.waitingOn ? (
-        <WaitingOnCard waiting={thread.waitingOn} />
+      ) : thread.waitingOn.length > 0 ? (
+        <WaitingOnCards waiting={thread.waitingOn} />
       ) : asking ? (
         <span className="text-sm">
           <span className="font-medium">The agent is waiting on you.</span>{" "}

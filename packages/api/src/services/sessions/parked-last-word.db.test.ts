@@ -58,7 +58,7 @@ describe.skipIf(!hasDatabase())("an agent parked on a delegate", () => {
     );
 
     await startSession({ threadId: made.threadId, text: "go" });
-    await markWaiting({ threadId: made.threadId, waitingOn: "agent-target" });
+    await markWaiting({ threadId: made.threadId, waitingOn: ["agent-target"] });
     await terminalFellQuiet(`Assistant: ${HANDOFF}\n`);
 
     expect(await agentSaid(made.threadId)).toBe(HANDOFF);
