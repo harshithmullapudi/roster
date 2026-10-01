@@ -45,7 +45,7 @@ export function ThreadReferences({
 }: ThreadReferencesProps) {
   const [open, setOpen] = useState(false);
 
-  const { data, isPending } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: ["thread-references", threadId],
     queryFn: () => trpc.threads.references.query({ projectId, threadId }),
     enabled: open,
@@ -70,12 +70,16 @@ export function ThreadReferences({
           align="end"
           className="flex max-h-[380px] w-80 flex-col overflow-y-auto p-1.5"
         >
-          {isPending || !data ? (
+          {isError ? (
+            <p className="text-muted-foreground px-2 py-5 text-center text-sm">
+              Could not read this thread.
+            </p>
+          ) : data ? (
+            <ReferenceList references={data} />
+          ) : (
             <span className="flex items-center justify-center py-6">
               <Loader2 className="text-muted-foreground size-4 animate-spin" />
             </span>
-          ) : (
-            <ReferenceList references={data} />
           )}
         </PopoverContent>
       </PopoverPortal>
@@ -171,7 +175,7 @@ function Row({
       </span>
       <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
       {detail ? (
-        <span className="text-muted-foreground shrink-0 truncate text-xs">
+        <span className="text-muted-foreground max-w-[40%] shrink-0 truncate text-xs">
           {detail}
         </span>
       ) : null}

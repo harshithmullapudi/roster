@@ -117,6 +117,14 @@ describe("collectReferences", () => {
     expect(found.pages[0]?.label).toBe("Roadmap");
   });
 
+  it("keeps a page whose slug is not decodable rather than throwing", () => {
+    const found = collectReferences([
+      message(1, { text: "https://app.superset.sh/page/%E0%A4%A" }),
+    ]);
+
+    expect(found.pages[0]?.label).toBe("%E0%A4%A");
+  });
+
   it("reads a github pull request as a pull request", () => {
     const found = collectReferences([
       message(1, { text: "https://github.com/superset-sh/roster/pull/64" }),

@@ -205,12 +205,20 @@ function asPage(url: URL, href: string, seq: number): ThreadPage | null {
 }
 
 function pageLabel(slug: string): string {
-  const words = decodeURIComponent(slug).split("-").filter(Boolean);
+  const words = readable(slug).split("-").filter(Boolean);
   const last = words[words.length - 1];
   if (words.length > 2 && last && PAGE_SUFFIX.test(last)) words.pop();
 
   const title = words.join(" ");
   return title.charAt(0).toUpperCase() + title.slice(1);
+}
+
+function readable(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function linkLabel(url: URL): string {
