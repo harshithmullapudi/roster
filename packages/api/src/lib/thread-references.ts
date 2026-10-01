@@ -40,9 +40,10 @@ export interface ThreadReferences {
 }
 
 const BARE_URL = /https?:\/\/[^\s<>"']+/g;
-const TRAILING = /[.,;:!?)\]}'"]+$/;
+const TRAILING = /[.,;:!?)\]}'"*~`]+$/;
 const PAGE_PATH = /^\/page\/([^/]+)/;
 const PULL_PATH = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)/;
+const ATTACHMENT_PATH = /^\/api\/files\/([^/]+)/;
 const PAGE_SUFFIX = /^[a-z0-9]{6}$/;
 
 const PAGE_HOST = "app.superset.sh";
@@ -52,11 +53,9 @@ export function collectReferences(
   sources: ReferenceSource[],
 ): ThreadReferences {
   const ordered = [...sources].sort((left, right) => left.seq - right.seq);
+  const files = collectFiles(ordered);
 
-  return {
-    files: collectFiles(ordered),
-    ...collectUrls(ordered),
-  };
+  return { files, ...collectUrls(ordered, files) };
 }
 
 function collectFiles(sources: ReferenceSource[]): ThreadFile[] {
@@ -81,12 +80,25 @@ function collectFiles(sources: ReferenceSource[]): ThreadFile[] {
 
 function collectUrls(
   sources: ReferenceSource[],
+  files: ThreadFile[],
 ): Omit<ThreadReferences, "files"> {
-  const seen = new Map<string, number>();
+  const listed = new Set(files.map((entry) => entry.id));
+  const seen = new Map<string, { href: string; seq: number }>();
 
   for (const source of sources) {
     for (const href of [...bodyLinks(source.body), ...textLinks(source.text)]) {
-      seen.set(href, source.seq);
+      const url = parse(href);
+      if (!url) continue;
+
+      const attachment = ATTACHMENT_PATH.exec(url.pathname)?.[1];
+      if (attachment && listed.has(attachment)) continue;
+
+      const key = identity(url);
+      const found = seen.get(key);
+      seen.set(key, {
+        href: found ? cleaner(found.href, href) : href,
+        seq: source.seq,
+      });
     }
   }
 
@@ -94,7 +106,7 @@ function collectUrls(
   const pages: ThreadPage[] = [];
   const links: ThreadLink[] = [];
 
-  for (const [href, seq] of seen) {
+  for (const { href, seq } of seen.values()) {
     const url = parse(href);
     if (!url) continue;
 
@@ -171,11 +183,32 @@ function host(url: URL): string {
   return url.hostname.replace(/^www\./, "");
 }
 
-function asPullRequest(
-  url: URL,
-  href: string,
-  seq: number,
-): ThreadPullRequest | null {
+function identity(url: URL): string {
+  const pull = pullParts(url);
+  if (pull) {
+    const { owner, repo, number } = pull;
+    return `pull:${owner}/${repo}#${number}`.toLowerCase();
+  }
+
+  const slug = pageSlug(url);
+  if (slug) return `page:${slug}`;
+
+  return `url:${host(url)}${url.pathname.replace(/\/$/, "")}${url.search}`;
+}
+
+function cleaner(left: string, right: string): string {
+  const rank = (href: string) =>
+    (href.startsWith("https:") ? 0 : 1_000_000) + href.length;
+  return rank(right) < rank(left) ? right : left;
+}
+
+interface PullParts {
+  owner: string;
+  repo: string;
+  number: number;
+}
+
+function pullParts(url: URL): PullParts | null {
   if (host(url) !== GITHUB_HOST) return null;
 
   const match = PULL_PATH.exec(url.pathname);
@@ -184,21 +217,27 @@ function asPullRequest(
   const [, owner, repo, number] = match;
   if (!owner || !repo || !number) return null;
 
-  return {
-    href,
-    owner,
-    repo,
-    number: Number(number),
-    label: `${repo} #${number}`,
-    seq,
-  };
+  return { owner, repo, number: Number(number) };
+}
+
+function pageSlug(url: URL): string | null {
+  if (host(url) !== PAGE_HOST) return null;
+  return PAGE_PATH.exec(url.pathname)?.[1] ?? null;
+}
+
+function asPullRequest(
+  url: URL,
+  href: string,
+  seq: number,
+): ThreadPullRequest | null {
+  const pull = pullParts(url);
+  if (!pull) return null;
+
+  return { href, ...pull, label: `${pull.repo} #${pull.number}`, seq };
 }
 
 function asPage(url: URL, href: string, seq: number): ThreadPage | null {
-  if (host(url) !== PAGE_HOST) return null;
-
-  const match = PAGE_PATH.exec(url.pathname);
-  const slug = match?.[1];
+  const slug = pageSlug(url);
   if (!slug) return null;
 
   return { href, slug, label: pageLabel(slug), seq };

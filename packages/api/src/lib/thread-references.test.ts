@@ -91,6 +91,37 @@ describe("collectReferences", () => {
     expect(found.links[0]?.seq).toBe(2);
   });
 
+  it("keeps one entry when a bare url is wrapped in markdown emphasis", () => {
+    const href = "https://example.com/a";
+    const found = collectReferences([
+      message(1, { body: doc(link(href)), text: `**${href}**` }),
+    ]);
+
+    expect(found.links).toEqual([
+      { href, label: "example.com/a", seq: 1 },
+    ]);
+  });
+
+  it("keeps one entry when the same url differs only by a fragment", () => {
+    const found = collectReferences([
+      message(1, { text: "https://example.com/a#intro" }),
+      message(2, { text: "https://example.com/a" }),
+    ]);
+
+    expect(found.links).toEqual([
+      { href: "https://example.com/a", label: "example.com/a", seq: 2 },
+    ]);
+  });
+
+  it("keeps one entry when the same url differs only by a trailing slash", () => {
+    const found = collectReferences([
+      message(1, { text: "https://example.com/a/" }),
+      message(2, { text: "https://example.com/a" }),
+    ]);
+
+    expect(found.links).toHaveLength(1);
+  });
+
   it("reads a superset page link as a page", () => {
     const found = collectReferences([
       message(1, {
@@ -107,6 +138,26 @@ describe("collectReferences", () => {
       },
     ]);
     expect(found.links).toHaveLength(0);
+  });
+
+  it("keeps one page when an agent bolds the url it just published", () => {
+    const href =
+      "https://app.superset.sh/page/running-host-service-in-a-container-on-railway-71axq7";
+    const found = collectReferences([
+      message(1, {
+        body: doc(link(href)),
+        text: `Published:\n\n**${href}**\n\nOrg-visible, version 1.`,
+      }),
+    ]);
+
+    expect(found.pages).toEqual([
+      {
+        href,
+        slug: "running-host-service-in-a-container-on-railway-71axq7",
+        label: "Running host service in a container on railway",
+        seq: 1,
+      },
+    ]);
   });
 
   it("keeps a short page slug whole", () => {
@@ -151,6 +202,36 @@ describe("collectReferences", () => {
     ]);
 
     expect(found.pullRequests[0]?.number).toBe(64);
+  });
+
+  it("keeps one pull request when the same one is linked two ways", () => {
+    const found = collectReferences([
+      message(1, {
+        text: "https://github.com/superset-sh/roster/pull/64/files#diff-abc",
+      }),
+      message(2, { text: "merged https://github.com/superset-sh/roster/pull/64" }),
+    ]);
+
+    expect(found.pullRequests).toEqual([
+      {
+        href: "https://github.com/superset-sh/roster/pull/64",
+        owner: "superset-sh",
+        repo: "roster",
+        number: 64,
+        label: "roster #64",
+        seq: 2,
+      },
+    ]);
+  });
+
+  it("leaves an attachment the thread already lists out of links", () => {
+    const found = collectReferences([
+      message(1, { attachments: [file("a", "chart.png")] }),
+      message(2, { text: "the chart is http://localhost:3000/api/files/a" }),
+    ]);
+
+    expect(found.files).toHaveLength(1);
+    expect(found.links).toHaveLength(0);
   });
 
   it("leaves an ordinary github link under links", () => {
