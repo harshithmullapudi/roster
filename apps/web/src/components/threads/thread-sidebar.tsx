@@ -8,6 +8,7 @@ import { OpenSessionButton } from "~/components/terminals/open-session-button";
 import { CloseOnEscape } from "./close-on-escape";
 import { ThreadMenu } from "./thread-menu";
 import { ThreadPanel } from "./thread-panel";
+import { ThreadReferences } from "./thread-references";
 
 export interface ThreadSidebarProps {
   projectId: string;
@@ -45,6 +46,7 @@ export function ThreadSidebar({
           </Button>
           <h2 className="min-w-0 flex-1 truncate text-base">Thread</h2>
           <OpenSessionButton projectId={projectId} threadId={threadId} />
+          <ThreadReferences projectId={projectId} threadId={threadId} />
           <ThreadMenu
             projectId={projectId}
             threadId={threadId}

@@ -12,6 +12,7 @@ import {
   reapThread,
   retryThread,
   threadDetail,
+  threadReferences,
   threadSummary,
   threadTarget,
 } from "../services/sessions";
@@ -78,6 +79,28 @@ export const threadsRouter = createTRPCRouter({
       if (!detail) throw new TRPCError({ code: "NOT_FOUND" });
 
       return detail;
+    }),
+
+  references: memberProcedure
+    .input(
+      z.object({
+        projectId: z.string().uuid(),
+        threadId: z.string().uuid(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const project = await requireOrgProject({
+        organizationId: ctx.organizationId,
+        memberId: ctx.member.id,
+        role: ctx.member.role,
+        projectId: input.projectId,
+      });
+      if (!project) throw new TRPCError({ code: "NOT_FOUND" });
+
+      return threadReferences({
+        projectId: project.id,
+        threadId: input.threadId,
+      });
     }),
 
   cancel: memberProcedure

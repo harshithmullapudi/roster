@@ -42,6 +42,7 @@ export {
   threadLeadStatus,
   threadProjectId,
   threadPublishState,
+  threadReferences,
   threadSummary,
   threadTarget,
   type ThreadDetail,

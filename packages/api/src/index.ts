@@ -56,6 +56,13 @@ export {
   type UploadResult,
 } from "./services/attachments";
 export {
+  type ThreadFile,
+  type ThreadLink,
+  type ThreadPage,
+  type ThreadPullRequest,
+  type ThreadReferences,
+} from "./lib/thread-references";
+export {
   ATTACHMENT_REFUSALS,
   ATTACHMENT_TYPES,
   isImageType,

@@ -21,12 +21,18 @@ import {
   isNull,
   lt,
   ne,
+  or,
   sql,
   type SQL,
 } from "drizzle-orm";
 
 import { agentDisplay, normalizeHandle } from "../../lib/agent-identity";
+import {
+  collectReferences,
+  type ThreadReferences,
+} from "../../lib/thread-references";
 import { readableError } from "../../utils/session-error";
+import { attachmentsForMessages } from "../attachments";
 import { type ChannelScope, visibleToMember } from "../channels";
 import {
 
@@ -755,6 +761,53 @@ export async function threadDetail(args: {
   const rows = [...rootRows, ...replyRows.reverse()];
 
   return { thread, messages: await withAttachments(rows.map(toChannelMessage)) };
+}
+
+export async function threadReferences(args: {
+  projectId: string;
+  threadId: string;
+}): Promise<ThreadReferences> {
+  const rows = await db
+    .select({
+      id: messages.id,
+      seq: messages.seq,
+      body: messages.body,
+      text: messages.text,
+    })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.projectId, args.projectId),
+        isNull(messages.deletedAt),
+        or(
+          eq(messages.threadId, args.threadId),
+          inArray(
+            messages.id,
+            db
+              .select({ id: threads.rootMessageId })
+              .from(threads)
+              .where(eq(threads.id, args.threadId)),
+          ),
+        ),
+      ),
+    )
+    .orderBy(asc(messages.seq));
+
+  if (rows.length === 0) {
+    return { files: [], pullRequests: [], pages: [], links: [] };
+  }
+
+  const grouped = await attachmentsForMessages(rows.map((row) => row.id));
+
+  return collectReferences(
+    rows.map((row) => ({
+      id: row.id,
+      seq: Number(row.seq),
+      body: row.body,
+      text: row.text,
+      attachments: grouped.get(row.id) ?? [],
+    })),
+  );
 }
 
 function threadMessageRows(conditions: SQL[], limit?: number) {
